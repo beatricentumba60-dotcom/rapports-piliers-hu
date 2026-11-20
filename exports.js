@@ -112,9 +112,9 @@
   var W = 13.333, H = 7.5, ENCRE = '0F3D3E', GRIS = '5D6B78';
   function morceaux(arr, n) { var o = []; for (var i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o.length ? o : [[]]; }
   function f1(v, pct) { if (v == null) return '–'; return pct ? (Math.round(v * 1000) / 10).toString().replace('.', ',') + ' %' : (Math.round(v * 10) / 10).toLocaleString('fr-FR'); }
-  // Emblème (icons/embleme.png) en data URL pour l'intégrer à la présentation
+  // Emblème (embleme.png) en data URL pour l'intégrer à la présentation
   function chargerEmbleme(nom) {
-    return fetch('icons/' + nom).then(function (r) { if (!r.ok) throw 0; return r.blob(); }).then(function (b) {
+    return fetch('' + nom).then(function (r) { if (!r.ok) throw 0; return r.blob(); }).then(function (b) {
       return new Promise(function (res) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = function () { res(null); }; fr.readAsDataURL(b); });
     }).catch(function () { return null; });
   }
