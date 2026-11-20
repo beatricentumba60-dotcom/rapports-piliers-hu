@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rapports des piliers MVE</title>
+<meta name="description" content="Saisie hors ligne et consolidation des rapports quotidiens des piliers de la riposte MVE – Haut-Uélé.">
+<meta name="theme-color" content="#0f3d3e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root {
+    --ink: #0f3d3e; --ink-2: #1b5e60;
+    --bg: #f3f5f6; --panel: #fff; --line: #dde3e7; --fg: #16212b; --muted: #5d6b78;
+    --ok: #23804f; --warn: #b97700; --bad: #c8312d; --ok-bg: #e3f3ea; --warn-bg: #fdf1d8; --bad-bg: #fbe5e4;
+    --radius: 12px;
+    --font: Roboto, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0e1719; --panel: #162326; --line: #2a3b3f; --fg: #e6eef0; --muted: #98abb0;
+      --ok: #5cc48d; --warn: #f0b84a; --bad: #ff7a72; --ok-bg: #173a29; --warn-bg: #3d2f12; --bad-bg: #44201f; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.4; -webkit-tap-highlight-color: transparent; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .top { position: sticky; top: 0; z-index: 20; background: var(--ink); color: #fff;
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); }
+  .top-row { display: flex; align-items: center; gap: 8px; }
+  .top h1 { font-size: 17px; font-weight: 600; margin: 0; flex: 1; min-width: 0; }
+  .top .src { font-size: 12px; opacity: .82; margin: 2px 0 0; }
+  .top .src.warn { color: #ffd27a; opacity: 1; }
+  .icon-btn { background: transparent; border: 0; color: #fff; width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; cursor: pointer; }
+  .icon-btn:active { background: rgba(255,255,255,.12); }
+  .icon-btn.spin svg { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+  main { padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(84px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); max-width: 980px; margin: 0 auto; }
+  .view { display: flex; flex-direction: column; gap: 14px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
+  .sub { font-size: 12.5px; color: var(--muted); margin: -4px 0 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; min-width: 0; }
+  .note { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field > label { font-size: 12.5px; color: var(--muted); }
+  .field select, .field input, .field textarea, .num { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); min-height: 44px; }
+  .field textarea { min-height: 72px; resize: vertical; line-height: 1.45; }
+  .row3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .pilier-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+  .pilier-tag i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  /* Formulaire */
+  details.sec { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  details.sec > summary { list-style: none; cursor: pointer; padding: 12px 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  details.sec > summary::-webkit-details-marker { display: none; }
+  details.sec > summary::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s; }
+  details.sec[open] > summary::after { transform: rotate(-135deg); }
+  details.sec .cnt { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .sec-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 14px; }
+  .nrow { display: flex; align-items: center; gap: 10px; justify-content: space-between; min-height: 44px; border-bottom: 1px dashed var(--line); }
+  .nrow label { font-size: 14px; flex: 1; min-width: 0; }
+  .num { width: 96px; flex: none; text-align: right; font-variant-numeric: tabular-nums; min-height: 40px; padding: 7px 10px; }
+  .num.err { border-color: var(--bad); background: var(--bad-bg); }
+  .gwrap { overflow-x: auto; }
+  table.g { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  table.g th { font-size: 12px; color: var(--muted); font-weight: 600; text-align: center; padding: 6px 4px; }
+  table.g th.l, table.g td.l { text-align: left; min-width: 150px; }
+  table.g td { padding: 4px; border-top: 1px solid var(--line); }
+  table.g .num { width: 100%; min-width: 70px; }
+  .liste-row { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; position: relative; }
+  .liste-row .field.wide { grid-column: 1 / -1; }
+  .liste-row .del { position: absolute; top: 4px; right: 4px; border: 0; background: transparent; color: var(--muted); width: 32px; height: 32px; border-radius: 16px; cursor: pointer; font-size: 18px; }
+  .liste-row .field input, .liste-row .field select, .liste-row .field textarea { min-height: 40px; padding: 7px 9px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 18px; border-radius: 12px; border: 0;
+    background: var(--ink); color: #fff; font-weight: 600; cursor: pointer; }
+  @media (prefers-color-scheme: dark) { .btn { background: #2b7a7c; } }
+  .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  .btn.small { min-height: 36px; padding: 0 12px; font-size: 13.5px; font-weight: 500; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; } .btns .btn { flex: 1 1 160px; }
+  .calc { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .calc div { background: var(--bg); border-radius: 10px; padding: 8px 10px; }
+  .calc span { display: block; font-size: 12px; color: var(--muted); }
+  .calc span { line-height: 1.25; }
+  .calc b { font-size: 19px; font-variant-numeric: tabular-nums; }
+  .warn-line { font-size: 13px; color: var(--warn); }
+  .privacy { font-size: 12.5px; background: var(--warn-bg); border-radius: 10px; padding: 8px 10px; }
+  /* Liste des rapports */
+  .rlist { display: flex; flex-direction: column; gap: 8px; }
+  .ritem { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; display: flex; gap: 10px; align-items: center; cursor: pointer; }
+  .ritem .t { flex: 1; min-width: 0; } .ritem .t b { display: block; } .ritem .t span { font-size: 12.5px; color: var(--muted); }
+  .badge { font-size: 12px; border-radius: 10px; padding: 2px 8px; font-weight: 600; white-space: nowrap; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); } .badge.warn { background: var(--warn-bg); color: var(--warn); } .badge.mute { background: var(--bg); color: var(--muted); }
+  /* Tableau de bord */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+  table.t { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.t th { text-align: right; font-weight: 600; font-size: 11.5px; color: var(--muted); padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: bottom; min-width: 64px; }
+  table.t td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.t th.l, table.t td.l { text-align: left; position: sticky; left: 0; background: var(--panel); white-space: nowrap; }
+  table.t tr.tot td { font-weight: 700; background: var(--bg); } table.t tr.tot td.l { background: var(--bg); }
+  table.t td.ok { color: var(--ok); font-weight: 700; } table.t td.no { color: var(--muted); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+  .kpi { background: var(--bg); border-radius: 10px; padding: 8px 10px; } .kpi span { display: block; font-size: 12px; color: var(--muted); line-height: 1.25; }
+  .kpi b { font-size: 22px; font-variant-numeric: tabular-nums; }
+  .pbloc h2 { display: flex; align-items: center; gap: 8px; } .pbloc h2 i { width: 12px; height: 12px; border-radius: 3px; }
+  .txts { font-size: 13.5px; line-height: 1.5; margin: 8px 0 0; padding-left: 18px; } .txts li { margin-bottom: 4px; }
+  .txts b { font-weight: 600; }
+  .filtres { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  /* Navigation, feuilles */
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--panel); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr);
+    padding: 4px max(8px, env(safe-area-inset-right, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
+  .tabs button { background: none; border: 0; padding: 6px 2px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: var(--muted); cursor: pointer; position: relative; }
+  .tabs button svg { width: 22px; height: 22px; }
+  .tabs button[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+  @media (prefers-color-scheme: dark) { .tabs button[aria-selected="true"] { color: #7fd3d5; } }
+  .tabs .dot { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--bad); color: #fff; font-size: 10.5px; line-height: 16px; padding: 0 4px; }
+  .sheet-bg { position: fixed; inset: 0; background: rgba(8,16,24,.45); z-index: 40; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; background: var(--panel); border-radius: 16px 16px 0 0; max-height: 90vh; overflow-y: auto; max-width: 640px; margin: 0 auto;
+    padding: 8px max(18px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px)); box-shadow: 0 -8px 30px rgba(0,0,0,.2); }
+  .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 4px auto 12px; }
+  .sheet h3 { margin: 0 0 12px; font-size: 17px; } .sheet .field { margin-bottom: 12px; }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 50; background: #1b2731; color: #fff;
+    padding: 10px 14px; border-radius: 10px; font-size: 13.5px; max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+  .busy { position: fixed; inset: 0; z-index: 60; background: rgba(8,16,24,.5); display: grid; place-items: center; color: #fff; font-weight: 600; }
+  .busy div { background: var(--ink); padding: 16px 20px; border-radius: 12px; }
+  :focus-visible { outline: 3px solid #5aa9e6; outline-offset: 2px; }
+  /* Qualité */
+  ul.ctrl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  ul.ctrl li { font-size: 13.5px; line-height: 1.4; padding: 7px 10px; border-radius: 8px; background: var(--bg); }
+  ul.ctrl li.erreur { background: var(--bad-bg); } ul.ctrl li.alerte { background: var(--warn-bg); } ul.ctrl li.ok { color: var(--ok); }
+  ul.ctrl li b { font-weight: 600; } ul.ctrl li small { display: block; color: var(--muted); font-size: 12px; }
+  .chk { display: flex; gap: 8px; align-items: center; font-size: 13.5px; color: var(--muted); margin: -2px 0 10px; }
+  .kpi.bad b { color: var(--bad); } .kpi.warn b { color: var(--warn); } .kpi.ok b { color: var(--ok); }
+  .regle { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .regle h3 { font-size: 14px; margin: 0 0 2px; } .regle .aide { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  .regle table.t td, .regle table.t th { padding: 5px 6px; }
+  table.conc th { min-width: 0; } table.conc td:last-child, table.conc th:last-child { white-space: normal; text-align: left; } table.conc td.l { white-space: normal; } table.conc .st { white-space: normal; }
+  .st { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 10px; padding: 1px 8px; white-space: nowrap; }
+  .st.ok { background: var(--ok-bg); color: var(--ok); } .st.ecart { background: var(--warn-bg); color: var(--warn); } .st.manque { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+  #f-reports { background: var(--bg); border-radius: 10px; padding: 10px; margin-bottom: 10px; font-size: 13.5px; }
+  #f-reports span { display: block; } #f-reports .btn { margin-top: 8px; }
+  /* En-tête officiel (Task Force Présidentielle Ebola 17 – SGI MVE 17 – DPS Haut-Uele) : toujours sur fond blanc */
+  .eo { position: relative; overflow: hidden; background: #fff; color: #1f2a78; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 16px 16px; text-align: center; font-family: "Century Gothic", "Avenir Next", "Futura", "Segoe UI", system-ui, sans-serif; }
+  .eo p { margin: 0; position: relative; }
+  .eo img { width: 92px; height: auto; display: block; margin: 0 auto 4px; position: relative; }
+  .eo-tf { font-size: clamp(11px, 3vw, 17px); letter-spacing: .05em; }
+  .eo-min { font-size: clamp(8px, 2.15vw, 13px); letter-spacing: .02em; margin-top: 2px !important; }
+  .eo-sgi { color: #c9a227; font-size: clamp(11px, 2.95vw, 21px); letter-spacing: .04em; margin-top: 4px !important; }
+  .eo-filet { display: flex; gap: 6px; justify-content: center; margin: 6px auto 8px; max-width: 520px; }
+  .eo-filet span { flex: 1; height: 3px; border-radius: 2px; background: #1d3f9a; } .eo-filet span:nth-child(2) { background: #d52b1e; } .eo-filet span:nth-child(3) { background: #f2b705; }
+  .eo-epi { color: #e30613; font-size: clamp(14px, 4.3vw, 28px); line-height: 1.15; } .eo-epi sup { font-size: .55em; }
+  .eo-dps { color: #00a651; font-size: clamp(12px, 3.5vw, 24px); line-height: 1.2; }
+  .eo-rdc { color: #111; font-size: clamp(11px, 3vw, 14px); font-weight: 700; text-decoration: underline; margin-top: 2px !important; }
+  .eo .los { position: absolute; width: 90px; height: 90px; transform: rotate(45deg); }
+  .eo .los.a { left: -38px; top: -48px; background: rgba(110, 150, 175, .45); } .eo .los.b { left: 22px; top: -18px; width: 48px; height: 48px; background: rgba(80, 125, 155, .45); }
+  .eo .los.c { right: -36px; top: -46px; background: rgba(120, 200, 235, .45); } .eo .los.d { right: 28px; top: 6px; width: 46px; height: 46px; background: rgba(70, 175, 225, .45); }
+  .eo-mini { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; font-family: "Century Gothic", "Avenir Next", "Segoe UI", system-ui, sans-serif; }
+  .eo-mini img { width: 46px; height: auto; flex: none; }
+  .eo-mini div { flex: 1; min-width: 0; } .eo-mini p { margin: 0; }
+  .eo-mini .eo-sgi { font-size: 11px; margin: 0 !important; letter-spacing: .02em; } .eo-mini .eo-dps { font-size: 11.5px; line-height: 1.3; } .eo-mini .eo-filet { margin: 5px 0 0; max-width: none; }
+  .eo-mini .eo-filet span { height: 2px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <h1>Rapports des piliers · Haut-Uélé</h1>
+    <button class="icon-btn" id="btn-sync" aria-label="Synchroniser">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg>
+    </button>
+    <button class="icon-btn" id="btn-reglages" aria-label="Réglages">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>
+    </button>
+  </div>
+  <p class="src" id="etat">Hors ligne</p>
+</header>
+
+<main>
+  <!-- SAISIR -->
+  <section class="view" id="v-saisir">
+    <div class="eo-mini">
+      <img src="icons/embleme.png" alt="Emblème de la République démocratique du Congo">
+      <div><p class="eo-sgi">SYSTÈME DE GESTION DE L’INCIDENT MVE 17</p><p class="eo-dps">17<sup>e</sup> épidémie MVE · Division Provinciale de la santé du Haut-Uele</p>
+      <div class="eo-filet"><span></span><span></span><span></span></div></div>
+    </div>
+    <div class="card">
+      <div class="row3">
+        <div class="field" style="grid-column:1/-1"><label for="f-pilier">Pilier</label><select id="f-pilier"></select></div>
+        <div class="field"><label for="f-date">Date du rapport</label><input type="date" id="f-date"></div>
+        <div class="field"><label for="f-zone" id="l-zone">Zone de santé</label><select id="f-zone"></select></div>
+      </div>
+      <div class="row3" id="f-entete" style="margin-top:10px"></div>
+      <p class="note" id="f-etat"></p>
+    </div>
+    <div id="f-sections" class="view" style="gap:10px"></div>
+    <div class="card" id="f-calc-card">
+      <h2>Indicateurs calculés</h2>
+      <div class="calc" id="f-calc"></div>
+    </div>
+    <div class="card" id="f-ctrl-card">
+      <h2>Contrôles de cohérence</h2>
+      <div id="f-reports" hidden></div>
+      <ul class="ctrl" id="f-ctrl"></ul>
+    </div>
+    <p class="privacy"><b>Confidentialité :</b> n’écrivez aucun nom de patient, de contact ou de défunt dans les zones de texte. Les rapports sont des chiffres agrégés par zone de santé.</p>
+    <div class="btns">
+      <button class="btn ghost" id="btn-brouillon" type="button">Enregistrer sur le téléphone</button>
+      <button class="btn" id="btn-envoyer" type="button">Valider et envoyer</button>
+    </div>
+    <div class="btns">
+      <button class="btn ghost small" id="btn-nouveau" type="button">Nouveau rapport</button>
+      <button class="btn ghost small" id="btn-supprimer" type="button" hidden>Supprimer ce rapport</button>
+    </div>
+  </section>
+
+  <!-- MES RAPPORTS -->
+  <section class="view" id="v-liste" hidden>
+    <div class="eo-mini">
+      <img src="icons/embleme.png" alt="Emblème de la République démocratique du Congo">
+      <div><p class="eo-sgi">SYSTÈME DE GESTION DE L’INCIDENT MVE 17</p><p class="eo-dps">17<sup>e</sup> épidémie MVE · Division Provinciale de la santé du Haut-Uele</p>
+      <div class="eo-filet"><span></span><span></span><span></span></div></div>
+    </div>
+    <div class="card">
+      <div class="filtres">
+        <div class="field"><label for="l-pilier">Pilier</label><select id="l-pilier"></select></div>
+        <div class="field"><label for="l-zone">Zone</label><select id="l-zone"></select></div>
+        <div class="field"><label for="l-qui">Rapports</label><select id="l-qui">
+          <option value="moi">Saisis sur ce téléphone</option><option value="tous">Tous (reçus de Google Sheets)</option></select></div>
+      </div>
+    </div>
+    <p class="sub" id="l-resume" style="margin:0"></p>
+    <div class="rlist" id="l-items"></div>
+  </section>
+
+  <!-- TABLEAU DE BORD -->
+  <!-- QUALITÉ -->
+  <section class="view" id="v-qualite" hidden>
+    <div class="eo-mini">
+      <img src="icons/embleme.png" alt="Emblème de la République démocratique du Congo">
+      <div><p class="eo-sgi">SYSTÈME DE GESTION DE L’INCIDENT MVE 17</p><p class="eo-dps">17<sup>e</sup> épidémie MVE · Division Provinciale de la santé du Haut-Uele</p>
+      <div class="eo-filet"><span></span><span></span><span></span></div></div>
+    </div>
+    <div class="card">
+      <h2>Qualité et concordance des rapports</h2>
+      <p class="sub">Cohérence de chaque rapport, continuité avec la veille et concordance des chiffres entre piliers pour une même zone.</p>
+      <div class="filtres">
+        <div class="field"><label for="q-date">Date</label><input type="date" id="q-date"></div>
+        <div class="field"><label for="q-periode">Période</label><select id="q-periode">
+          <option value="0">Ce jour</option><option value="7">7 derniers jours</option><option value="21">21 derniers jours</option><option value="tout">Depuis le début</option></select></div>
+        <div class="field"><label for="q-zone">Zone de santé</label><select id="q-zone"></select></div>
+        <div class="field"><label for="q-pilier">Pilier</label><select id="q-pilier"></select></div>
+      </div>
+    </div>
+    <div class="card"><div class="kpis" id="q-kpis" style="margin:0"></div></div>
+    <div class="card">
+      <h2>Concordance entre piliers</h2>
+      <p class="sub" id="q-conc-sub"></p>
+      <label class="chk"><input type="checkbox" id="q-tout"> Afficher aussi les concordances respectées</label>
+      <div id="q-conc"></div>
+    </div>
+    <div class="card">
+      <h2>Rapports à corriger</h2>
+      <p class="sub" id="q-rap-sub"></p>
+      <div class="rlist" id="q-rap"></div>
+    </div>
+    <div class="card">
+      <h2>Règles appliquées</h2>
+      <details class="sec"><summary>Voir les règles de contrôle</summary><div class="sec-body" id="q-regles"></div></details>
+    </div>
+  </section>
+
+  <section class="view" id="v-tableau" hidden>
+    <div class="eo" role="img" aria-label="Task Force Présidentielle Ebola 17 – Ministère de la Santé publique, Hygiène et Prévoyance sociale – Système de gestion de l’incident MVE 17 – 17e épidémie de la maladie à virus Ebola – Division provinciale de la santé du Haut-Uele – République démocratique du Congo">
+      <i class="los a"></i><i class="los b"></i><i class="los c"></i><i class="los d"></i>
+      <img src="icons/embleme.png" alt="">
+      <p class="eo-tf">TASK FORCE PRÉSIDENTIELLE EBOLA 17</p>
+      <p class="eo-min">MINISTÈRE DE LA SANTÉ PUBLIQUE, HYGIÈNE ET PRÉVOYANCE SOCIALE</p>
+      <p class="eo-sgi">SYSTÈME DE GESTION DE L’INCIDENT MVE 17</p>
+      <div class="eo-filet"><span></span><span></span><span></span></div>
+      <p class="eo-epi">17<sup>e</sup> Epidémie de la Maladie à Virus Ebola</p>
+      <p class="eo-dps">Division Provinciale de la santé du Haut-Uele</p>
+      <p class="eo-rdc">République Démocratique du Congo</p>
+    </div>
+    <div class="card">
+      <div class="filtres">
+        <div class="field"><label for="t-date">Date</label><input type="date" id="t-date"></div>
+        <div class="field"><label for="t-periode">Période</label><select id="t-periode">
+          <option value="0">Ce jour</option><option value="7">7 derniers jours</option><option value="21">21 derniers jours</option>
+          <option value="tout">Depuis le début (cumul)</option></select></div>
+        <div class="field"><label for="t-zone">Zone de santé</label><select id="t-zone"></select></div>
+        <div class="field"><label for="t-pilier">Pilier</label><select id="t-pilier"></select></div>
+      </div>
+      <p class="note" id="t-info"></p>
+      <div class="btns" style="margin-top:10px">
+        <button class="btn small" id="btn-xlsx" type="button">Exporter en Excel</button>
+        <button class="btn small" id="btn-pptx" type="button">Diapositives du jour</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Complétude des rapports</h2>
+      <p class="sub" id="t-comp-sub"></p>
+      <div class="tablewrap"><table class="t" id="t-comp"></table></div>
+    </div>
+    <div id="t-piliers" class="view"></div>
+  </section>
+</main>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-v="saisir" aria-selected="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M14 4h-8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Saisir</button>
+  <button role="tab" data-v="liste" aria-selected="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Mes rapports<span class="dot" id="dot-attente" hidden></span></button>
+  <button role="tab" data-v="qualite" aria-selected="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Qualité<span class="dot" id="dot-qualite" hidden></span></button>
+  <button role="tab" data-v="tableau" aria-selected="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>Tableau de bord</button>
+</nav>
+
+<div class="sheet-bg" id="sheet-bg" hidden></div>
+<div class="sheet" id="sheet-reglages" role="dialog" aria-modal="true" aria-labelledby="t-reglages" hidden>
+  <div class="grab"></div>
+  <div class="eo" role="img" aria-label="Task Force Présidentielle Ebola 17 – Ministère de la Santé publique, Hygiène et Prévoyance sociale – Système de gestion de l’incident MVE 17 – 17e épidémie de la maladie à virus Ebola – Division provinciale de la santé du Haut-Uele – République démocratique du Congo">
+      <i class="los a"></i><i class="los b"></i><i class="los c"></i><i class="los d"></i>
+      <img src="icons/embleme.png" alt="">
+      <p class="eo-tf">TASK FORCE PRÉSIDENTIELLE EBOLA 17</p>
+      <p class="eo-min">MINISTÈRE DE LA SANTÉ PUBLIQUE, HYGIÈNE ET PRÉVOYANCE SOCIALE</p>
+      <p class="eo-sgi">SYSTÈME DE GESTION DE L’INCIDENT MVE 17</p>
+      <div class="eo-filet"><span></span><span></span><span></span></div>
+      <p class="eo-epi">17<sup>e</sup> Epidémie de la Maladie à Virus Ebola</p>
+      <p class="eo-dps">Division Provinciale de la santé du Haut-Uele</p>
+      <p class="eo-rdc">République Démocratique du Congo</p>
+    </div>
+  <h3 id="t-reglages" style="margin-top:14px">Réglages</h3>
+  <div class="field"><label for="r-auteur">Votre nom et fonction (affichés sur vos rapports)</label><input id="r-auteur" autocomplete="name" placeholder="ex. : Point focal surveillance ZS Wamba"></div>
+  <div class="row3">
+    <div class="field"><label for="r-pilier">Mon pilier (par défaut)</label><select id="r-pilier"></select></div>
+    <div class="field"><label for="r-zone">Ma zone (par défaut)</label><select id="r-zone"></select></div>
+  </div>
+  <div class="field"><label for="r-url">Adresse du script Google (fournie par la coordination)</label><input id="r-url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec"></div>
+  <div class="field"><label for="r-cle">Clé d’équipe</label><input id="r-cle" type="password" autocomplete="off"></div>
+  <label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:-4px 0 12px;color:var(--muted)"><input type="checkbox" id="r-voir"> Afficher la clé</label>
+  <div class="stack">
+    <button class="btn" id="btn-r-ok" type="button">Enregistrer et tester la connexion</button>
+    <button class="btn ghost" id="btn-r-tout" type="button">Recharger tous les rapports depuis Google Sheets</button>
+    <button class="btn ghost" data-close type="button">Fermer</button>
+  </div>
+  <p class="note" id="r-msg"></p>
+  <p class="note">Sans connexion, les rapports restent sur le téléphone et partent automatiquement au retour du réseau.</p>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<div class="busy" id="busy" hidden><div id="busy-txt">Préparation…</div></div>
+
+<script src="piliers-def.js"></script>
+<script src="agregats.js"></script>
+<script src="xlsx.mini.min.js"></script>
+<script src="qualite-piliers.js"></script>
+<script src="exports.js"></script>
+<script src="app-piliers.js"></script>
+</body>
+</html>
