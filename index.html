@@ -156,6 +156,8 @@
   .eo .los { position: absolute; width: 90px; height: 90px; transform: rotate(45deg); }
   .eo .los.a { left: -38px; top: -48px; background: rgba(110, 150, 175, .45); } .eo .los.b { left: 22px; top: -18px; width: 48px; height: 48px; background: rgba(80, 125, 155, .45); }
   .eo .los.c { right: -36px; top: -46px; background: rgba(120, 200, 235, .45); } .eo .los.d { right: 28px; top: 6px; width: 46px; height: 46px; background: rgba(70, 175, 225, .45); }
+  .eo-img { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .eo-img img { display: block; width: 100%; height: auto; }
   .eo-mini { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; font-family: "Century Gothic", "Avenir Next", "Segoe UI", system-ui, sans-serif; }
   .eo-mini img { width: 46px; height: auto; flex: none; }
   .eo-mini div { flex: 1; min-width: 0; } .eo-mini p { margin: 0; }
@@ -272,17 +274,7 @@
   </section>
 
   <section class="view" id="v-tableau" hidden>
-    <div class="eo" role="img" aria-label="Task Force Présidentielle Ebola 17 – Ministère de la Santé publique, Hygiène et Prévoyance sociale – Système de gestion de l’incident MVE 17 – 17e épidémie de la maladie à virus Ebola – Division provinciale de la santé du Haut-Uele – République démocratique du Congo">
-      <i class="los a"></i><i class="los b"></i><i class="los c"></i><i class="los d"></i>
-      <img src="icons/embleme.png" alt="">
-      <p class="eo-tf">TASK FORCE PRÉSIDENTIELLE EBOLA 17</p>
-      <p class="eo-min">MINISTÈRE DE LA SANTÉ PUBLIQUE, HYGIÈNE ET PRÉVOYANCE SOCIALE</p>
-      <p class="eo-sgi">SYSTÈME DE GESTION DE L’INCIDENT MVE 17</p>
-      <div class="eo-filet"><span></span><span></span><span></span></div>
-      <p class="eo-epi">17<sup>e</sup> Epidémie de la Maladie à Virus Ebola</p>
-      <p class="eo-dps">Division Provinciale de la santé du Haut-Uele</p>
-      <p class="eo-rdc">République Démocratique du Congo</p>
-    </div>
+    <div class="eo-img"><img src="icons/entete-officiel.png" alt="Task Force Présidentielle Ebola 17 – Ministère de la Santé publique, Hygiène et Prévoyance sociale – Système de gestion de l’incident MVE 17 – 17e épidémie de la maladie à virus Ebola – Division provinciale de la santé du Haut-Uele" width="1252" height="402"></div>
     <div class="card">
       <div class="filtres">
         <div class="field"><label for="t-date">Date</label><input type="date" id="t-date"></div>
@@ -321,17 +313,7 @@
 <div class="sheet-bg" id="sheet-bg" hidden></div>
 <div class="sheet" id="sheet-reglages" role="dialog" aria-modal="true" aria-labelledby="t-reglages" hidden>
   <div class="grab"></div>
-  <div class="eo" role="img" aria-label="Task Force Présidentielle Ebola 17 – Ministère de la Santé publique, Hygiène et Prévoyance sociale – Système de gestion de l’incident MVE 17 – 17e épidémie de la maladie à virus Ebola – Division provinciale de la santé du Haut-Uele – République démocratique du Congo">
-      <i class="los a"></i><i class="los b"></i><i class="los c"></i><i class="los d"></i>
-      <img src="icons/embleme.png" alt="">
-      <p class="eo-tf">TASK FORCE PRÉSIDENTIELLE EBOLA 17</p>
-      <p class="eo-min">MINISTÈRE DE LA SANTÉ PUBLIQUE, HYGIÈNE ET PRÉVOYANCE SOCIALE</p>
-      <p class="eo-sgi">SYSTÈME DE GESTION DE L’INCIDENT MVE 17</p>
-      <div class="eo-filet"><span></span><span></span><span></span></div>
-      <p class="eo-epi">17<sup>e</sup> Epidémie de la Maladie à Virus Ebola</p>
-      <p class="eo-dps">Division Provinciale de la santé du Haut-Uele</p>
-      <p class="eo-rdc">République Démocratique du Congo</p>
-    </div>
+  <div class="eo-img"><img src="icons/entete-officiel.png" alt="Task Force Présidentielle Ebola 17 – Ministère de la Santé publique, Hygiène et Prévoyance sociale – Système de gestion de l’incident MVE 17 – 17e épidémie de la maladie à virus Ebola – Division provinciale de la santé du Haut-Uele" width="1252" height="402"></div>
   <h3 id="t-reglages" style="margin-top:14px">Réglages</h3>
   <div class="field"><label for="r-auteur">Votre nom et fonction (affichés sur vos rapports)</label><input id="r-auteur" autocomplete="name" placeholder="ex. : Point focal surveillance ZS Wamba"></div>
   <div class="row3">

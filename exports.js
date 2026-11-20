@@ -27,8 +27,7 @@
     function pct(ws, r, c) { var a = X.utils.encode_cell({ r: r, c: c }); if (ws[a] && typeof ws[a].v === 'number') ws[a].z = '0.0%'; }
     // Lisez-moi
     feuille('Lisez-moi', [['TASK FORCE PRÉSIDENTIELLE EBOLA 17'], ['MINISTÈRE DE LA SANTÉ PUBLIQUE, HYGIÈNE ET PRÉVOYANCE SOCIALE'],
-      ['SYSTÈME DE GESTION DE L’INCIDENT MVE 17'], ['17e Epidémie de la Maladie à Virus Ebola – Division Provinciale de la santé du Haut-Uele'],
-      ['République Démocratique du Congo'], [], ['Rapports quotidiens des piliers'], [],
+      ['SYSTÈME DE GESTION DE L’INCIDENT MVE 17'], ['17e Epidémie de la Maladie à Virus Ebola – Division Provinciale de la santé du Haut-Uele'], [], ['Rapports quotidiens des piliers'], [],
       ['Période', libPeriode(f)], ['Zone', f.zone || 'Toutes les zones'], ['Pilier', f.pilier ? D.pilier(f.pilier).nom : 'Tous'],
       ['Exporté le', new Date().toLocaleString('fr-FR')], [],
       ['Feuille « Synthèse » : consolidation par pilier et par zone. Les valeurs « fin de journée » (reports, hospitalisés, stocks…) prennent le dernier jour de la période ; les autres sont additionnées.'],
@@ -120,20 +119,22 @@
     }).catch(function () { return null; });
   }
   function diapos(rapports, f) {
-    return Promise.all([chargerEmbleme('embleme.png'), chargerEmbleme('embleme-petit.png')]).then(function (e) { return diapos_(rapports, f, e[0], e[1]); });
+    return Promise.all([chargerEmbleme('entete-officiel.png'), chargerEmbleme('embleme-petit.png')]).then(function (e) { return diapos_(rapports, f, e[0], e[1]); });
   }
   // Couleurs de l'en-tête officiel du SGI MVE 17
   var OFF = { marine: '1F2A78', or: 'C9A227', rouge: 'E30613', vert: '00A651', bleu: '1D3F9A', rougeL: 'D52B1E', jaune: 'F2B705' };
-  function diapos_(rapports, f, emb, embPetit) {
+  function diapos_(rapports, f, banniere, embPetit) {
     var P = new root.PptxGenJS();
     P.layout = 'LAYOUT_WIDE'; P.author = 'DPS Haut-Uélé – SGI MVE'; P.title = 'Rapports des piliers ' + libPeriode(f);
-    var periode = libPeriode(f), lieu = f.zone || 'Province du Haut-Uélé';
+    // Seulement la date (et la zone si un filtre de zone est choisi)
+    var periode = f.periode === '0' ? A.fr(f.fin) : libPeriode(f).replace(/^du /, 'Du '), lieu = f.zone || '';
+    var etiquette = lieu ? lieu + ' · ' + periode : periode;
     function nouvelle(titre, couleur, sousTitre) {
       var s = P.addSlide();
       s.background = { color: 'FFFFFF' };
       s.addShape(P.ShapeType.rect, { x: 0, y: 0, w: W, h: 0.85, fill: { color: couleur || ENCRE }, line: { color: couleur || ENCRE } });
       s.addText(titre, { x: 0.4, y: 0.1, w: W - 3.2, h: 0.65, fontFace: 'Arial', fontSize: 22, bold: true, color: 'FFFFFF', valign: 'middle', fit: 'shrink' });
-      s.addText(lieu + '\n' + periode, { x: W - 2.9, y: 0.1, w: 2.6, h: 0.65, fontFace: 'Arial', fontSize: 10, color: 'FFFFFF', align: 'right', valign: 'middle' });
+      s.addText(lieu ? lieu + '\n' + periode : periode, { x: W - 2.9, y: 0.1, w: 2.6, h: 0.65, fontFace: 'Arial', fontSize: 10, color: 'FFFFFF', align: 'right', valign: 'middle' });
       if (sousTitre) s.addText(sousTitre, { x: 0.4, y: 0.95, w: W - 0.8, h: 0.4, fontFace: 'Arial', fontSize: 13, color: GRIS, italic: true });
       // Filet tricolore sous le bandeau, comme l'en-tête officiel
       [OFF.bleu, OFF.rougeL, OFF.jaune].forEach(function (c, i) { s.addShape(P.ShapeType.rect, { x: i * W / 3, y: 0.85, w: W / 3, h: 0.05, fill: { color: c }, line: { color: c } }); });
@@ -170,24 +171,12 @@
     // Couverture : en-tête officiel (Task Force, Ministère, SGI MVE 17, DPS Haut-Uele)
     var c0 = P.addSlide();
     c0.background = { color: 'FFFFFF' };
-    var losange = function (x, y, t, coul, transp) {
-      c0.addShape(P.ShapeType.rect, { x: x, y: y, w: t, h: t, rotate: 45, fill: { color: coul, transparency: transp }, line: { color: coul, transparency: 100 } });
-    };
-    losange(-0.55, -0.75, 1.9, '7FA3BA', 55); losange(0.6, 0.05, 1.0, '5E8AA6', 45);
-    losange(W - 1.45, -0.8, 2.1, '8FD0EC', 50); losange(W - 2.45, 0.5, 1.1, '5BBDE6', 45);
-    if (emb) c0.addImage({ data: emb, x: W / 2 - 0.82, y: 0.12, w: 1.64, h: 1.55 });
+    // Image officielle fournie (1252 × 402 px), centrée en haut de la couverture
+    if (banniere) { var bw0 = W - 1.0, bh0 = bw0 * 402 / 1252; c0.addImage({ data: banniere, x: 0.5, y: 0.35, w: bw0, h: bh0 }); }
     var cf = 'Century Gothic';
-    c0.addText('TASK FORCE PRÉSIDENTIELLE EBOLA 17', { x: 0.5, y: 1.72, w: W - 1, h: 0.38, fontFace: cf, fontSize: 17, color: OFF.marine, align: 'center', charSpacing: 1.5 });
-    c0.addText('MINISTÈRE DE LA SANTÉ PUBLIQUE, HYGIÈNE ET PRÉVOYANCE SOCIALE', { x: 0.5, y: 2.08, w: W - 1, h: 0.34, fontFace: cf, fontSize: 13, color: OFF.marine, align: 'center', charSpacing: 1 });
-    c0.addText('SYSTÈME DE GESTION DE L’INCIDENT MVE 17', { x: 0.5, y: 2.42, w: W - 1, h: 0.45, fontFace: cf, fontSize: 22, color: OFF.or, align: 'center', charSpacing: 2 });
-    [OFF.bleu, OFF.rougeL, OFF.jaune].forEach(function (c, i) { c0.addShape(P.ShapeType.rect, { x: 3.35 + i * 2.25, y: 2.93, w: 2.15, h: 0.05, fill: { color: c }, line: { color: c } }); });
-    c0.addText([{ text: '17', options: {} }, { text: 'e', options: { superscript: true } }, { text: ' Epidémie de la Maladie à Virus Ebola', options: {} }],
-      { x: 0.5, y: 3.15, w: W - 1, h: 0.6, fontFace: cf, fontSize: 30, color: OFF.rouge, align: 'center' });
-    c0.addText('Division Provinciale de la santé du Haut-Uele', { x: 0.5, y: 3.72, w: W - 1, h: 0.5, fontFace: cf, fontSize: 24, color: OFF.vert, align: 'center' });
-    c0.addText('République Démocratique du Congo', { x: 0.5, y: 4.2, w: W - 1, h: 0.35, fontFace: cf, fontSize: 14, bold: true, underline: { style: 'sng' }, color: '000000', align: 'center' });
     c0.addShape(P.ShapeType.rect, { x: 2.4, y: 4.95, w: W - 4.8, h: 1.25, fill: { color: 'F1F5F6' }, line: { color: 'F1F5F6' } });
     c0.addText('Rapports quotidiens des piliers – réunion de coordination', { x: 2.4, y: 5.02, w: W - 4.8, h: 0.55, fontFace: cf, fontSize: 20, bold: true, color: ENCRE, align: 'center' });
-    c0.addText(lieu + ' · ' + periode, { x: 2.4, y: 5.55, w: W - 4.8, h: 0.5, fontFace: cf, fontSize: 16, color: OFF.or, bold: true, align: 'center' });
+    c0.addText(etiquette, { x: 2.4, y: 5.55, w: W - 4.8, h: 0.5, fontFace: cf, fontSize: 16, color: OFF.or, bold: true, align: 'center' });
     c0.addText('Généré le ' + new Date().toLocaleString('fr-FR') + ' à partir des rapports saisis dans l’application « Rapports des piliers ».', { x: 0.6, y: H - 0.6, w: W - 1.2, h: 0.35, fontFace: 'Arial', fontSize: 10, color: '8A97A3', align: 'center' });
 
     // Complétude
