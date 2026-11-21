@@ -105,7 +105,7 @@
       });
       feuille('Qualité', qa, [24, 14, 70, 26, 16, 22, 10, 10, 26, 22]);
     }
-    X.writeFile(wb, 'Rapports_piliers_HU_' + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.xlsx');
+    X.writeFile(wb, (f.pilier ? 'Rapport_' + D.pilier(f.pilier).court.replace(/[\s\/]+/g, '_') + '_HU_' : 'Rapports_piliers_HU_') + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.xlsx');
   }
 
   /* ---------- PowerPoint ---------- */
@@ -175,7 +175,7 @@
     if (banniere) { var bw0 = W - 1.0, bh0 = bw0 * 402 / 1252; c0.addImage({ data: banniere, x: 0.5, y: 0.35, w: bw0, h: bh0 }); }
     var cf = 'Century Gothic';
     c0.addShape(P.ShapeType.rect, { x: 2.4, y: 4.95, w: W - 4.8, h: 1.25, fill: { color: 'F1F5F6' }, line: { color: 'F1F5F6' } });
-    c0.addText('Rapports quotidiens des piliers – réunion de coordination', { x: 2.4, y: 5.02, w: W - 4.8, h: 0.55, fontFace: cf, fontSize: 20, bold: true, color: ENCRE, align: 'center' });
+    c0.addText(f.pilier ? 'Rapport du pilier ' + D.pilier(f.pilier).nom : 'Rapports quotidiens des piliers – réunion de coordination', { x: 2.4, y: 5.02, w: W - 4.8, h: 0.55, fontFace: cf, fontSize: 20, bold: true, color: ENCRE, align: 'center' });
     c0.addText(etiquette, { x: 2.4, y: 5.55, w: W - 4.8, h: 0.5, fontFace: cf, fontSize: 16, color: OFF.or, bold: true, align: 'center' });
     c0.addText('Généré le ' + new Date().toLocaleString('fr-FR') + ' à partir des rapports saisis dans l’application « Rapports des piliers ».', { x: 0.6, y: H - 0.6, w: W - 1.2, h: 0.35, fontFace: 'Arial', fontSize: 10, color: '8A97A3', align: 'center' });
 
@@ -183,7 +183,7 @@
     var C = A.completude(rapports, f.fin), cols = D.ZONES.concat([D.PROVINCE]);
     var sc = nouvelle('Complétude des rapports du ' + A.fr(f.fin));
     tableau(sc, ['Pilier'].concat(cols.map(function (z) { return z === D.PROVINCE ? 'Prov.' : z.replace('Boma Mangbetu', 'Boma M.'); }), ['ZS']),
-      D.PILIERS.map(function (p) { var c = C[p.id] || {}; return [p.court].concat(cols.map(function (z) { return c[z] ? '✓' : ''; }), [D.ZONES.filter(function (z) { return c[z]; }).length + '/13']); }),
+      D.PILIERS.filter(function (p) { return !f.pilier || p.id === f.pilier; }).map(function (p) { var c = C[p.id] || {}; return [p.court].concat(cols.map(function (z) { return c[z] ? '✓' : ''; }), [D.ZONES.filter(function (z) { return c[z]; }).length + '/13']); }),
       { wl: 2.4, fs: 10, gauche: false });
 
     // Qualité et concordance
@@ -280,7 +280,7 @@
           { couleur: coul, colW: [1.6, 4.2, 4.2, 1.6, 0.93], fs: 11, gauche: true });
       }
     });
-    return P.writeFile({ fileName: 'Rapports_piliers_HU_' + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.pptx' });
+    return P.writeFile({ fileName: (f.pilier ? 'Rapport_' + D.pilier(f.pilier).court.replace(/[\s\/]+/g, '_') + '_HU_' : 'Rapports_piliers_HU_') + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.pptx' });
   }
 
   root.EXPORTS = { excel: excel, diapos: diapos };

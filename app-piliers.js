@@ -375,6 +375,9 @@
   }
   function rendreTableau() {
     var f = filtresTableau(), R = state.rapports;
+    var pc = f.pilier ? D.pilier(f.pilier) : null;
+    $('#btn-pptx').textContent = pc ? 'Diapositives – ' + pc.court : 'Diapositives du jour';
+    $('#btn-xlsx').textContent = pc ? 'Excel – ' + pc.court : 'Exporter en Excel';
     $('#t-info').textContent = (f.periode === '0' ? 'Rapports du ' + A.fr(f.fin) : f.periode === 'tout' ? 'Cumul jusqu’au ' + A.fr(f.fin) : 'Du ' + A.fr(f.debut) + ' au ' + A.fr(f.fin)) +
       ' · ' + (f.zone || 'toutes les zones') + '. Les valeurs marquées « fin de journée » prennent le dernier jour, les autres s’additionnent.';
     // Complétude
