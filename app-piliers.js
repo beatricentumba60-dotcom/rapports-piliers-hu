@@ -631,10 +631,20 @@
       }).catch(function () { return a; });
     });
   }
+  function echeance() {
+    var v = ((state.annuaire && state.annuaire.reglages) || {})['Heure limite du rapport'];
+    var m = String(v == null || v === '' ? '15' : v).match(/(\d{1,2})\s*(?:h|:)?\s*(\d{2})?/i);
+    var h = m ? Math.min(22, +m[1]) : 15, mn = m && m[2] ? Math.min(59, +m[2]) : 0;
+    return { h: h, m: mn, texte: h + ' h' + (mn ? ' ' + ('0' + mn).slice(-2) : '') };
+  }
   function messageRappel(fc, date) {
-    var p = D.pilier(fc.pilier);
-    return 'Bonjour ' + (fc.nom || '') + ', rappel du SGI MVE 17 – DPS Haut-Uele : le rapport du pilier ' + (p ? p.nom : fc.pilier) + ' pour la zone ' + fc.zone +
-      ' du ' + A.fr(date) + ' n’est pas encore reçu. Merci de le renseigner et de l’envoyer dans l’application « Rapports des piliers » : ' + lienApp();
+    var p = D.pilier(fc.pilier), ech = echeance(), n = new Date();
+    var avant = date === A.jour(n) && n.getHours() * 60 + n.getMinutes() < ech.h * 60 + ech.m;
+    var app = 'dans l’application « Rapports des piliers » : ' + lienApp();
+    var debut = 'Bonjour ' + (fc.nom || '') + ', rappel du SGI MVE 17 – DPS Haut-Uele : le rapport du pilier ' + (p ? p.nom : fc.pilier) + ' pour la zone ' + fc.zone;
+    if (avant) return debut + ' est attendu aujourd’hui (' + A.fr(date) + ') avant ' + ech.texte + '. Merci de le renseigner et de l’envoyer ' + app;
+    if (date < A.jour(n)) return debut + ' du ' + A.fr(date) + ' n’a toujours pas été reçu (échéance : ' + ech.texte + ' ce jour-là). Merci de l’envoyer dès que possible en choisissant la date du ' + A.fr(date) + ' ' + app;
+    return debut + ' du ' + A.fr(date) + ' n’a pas été reçu à l’échéance de ' + ech.texte + '. Merci de l’envoyer dès que possible ' + app;
   }
   function manquants(date, f) {
     var a = state.annuaire; if (!a) return null;
@@ -648,7 +658,9 @@
     if (!state.reglages.cleCoord) { card.hidden = true; return; }
     card.hidden = false;
     if (!state.annuaire) { $('#t-rap-sub').textContent = 'Chargement de l’annuaire des points focaux…'; chargerAnnuaire(true).then(function (a) { if (a) rendreRappels(f); else $('#t-rap-sub').textContent = 'Annuaire indisponible : vérifiez la clé coordination et la connexion.'; }); return; }
-    var M = manquants(f.fin, f), host = $('#t-rap-liste');
+    var M = manquants(f.fin, f), host = $('#t-rap-liste'), ech = echeance();
+    $('#t-rap-note').textContent = 'Rappels automatiques (heure de Lubumbashi) : 7 h 00 et 13 h 00 avant l’échéance de ' + ech.texte + ', puis ' + (ech.h + 1) + ' h' + (ech.m ? ' ' + ('0' + ech.m).slice(-2) : ' 00') +
+      ' pour les retards ; à 7 h, relance aussi des rapports de la veille encore manquants ; par e-mail aux points focaux et récapitulatif à la coordination. Le bouton WhatsApp ouvre le message prêt à envoyer.';
     state.rappelsListe = M; state.rappelsDate = f.fin;
     $('#t-rap-sub').textContent = M.length ? M.length + ' rapport' + (M.length > 1 ? 's' : '') + ' attendu' + (M.length > 1 ? 's' : '') + ' pour le ' + A.fr(f.fin) + ' et non reçu' + (M.length > 1 ? 's' : '') +
       ' (d’après l’annuaire des points focaux). Synchronisez (⟳) avant de rappeler.' : '✓ Tous les rapports attendus pour le ' + A.fr(f.fin) + ' sont reçus.';
