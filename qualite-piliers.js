@@ -163,7 +163,7 @@
 
   /* Contrôles internes d'un rapport : [{ regle, ok, a, b }] (règles applicables seulement) */
   function controlerRapport(r) {
-    var p = D.pilier(r.pilier); if (!p) return [];
+    var p = D.pilier(r.pilier); if (!p || A.estDepart(r)) return [];
     var V = valeursRapport(p, r), v = lecteur(V), out = [];
     (INTERNES[p.id] || []).forEach(function (R) {
       var x; try { x = R.f(v); } catch (e) { x = [null]; }
@@ -174,7 +174,7 @@
   }
   /* Continuité : rapport r comparé au rapport de la veille (même clé, date − 1) */
   function controlerContinuite(r, tous) {
-    var p = D.pilier(r.pilier), regles = CONTINUITE[r.pilier]; if (!p || !regles) return [];
+    var p = D.pilier(r.pilier), regles = CONTINUITE[r.pilier]; if (!p || !regles || A.estDepart(r)) return [];
     var veille = trouverVeille(r, tous); if (!veille) return [];
     var V0 = valeursRapport(p, veille), K0 = A.calculer(p, V0), V = valeursRapport(p, r), out = [];
     regles.forEach(function (R) {
@@ -191,7 +191,7 @@
   }
   /* Valeurs proposées pour les reports, d'après le rapport de la veille */
   function reportsProposes(r, tous) {
-    var p = D.pilier(r.pilier), regles = CONTINUITE[r.pilier]; if (!p || !regles) return null;
+    var p = D.pilier(r.pilier), regles = CONTINUITE[r.pilier]; if (!p || !regles || A.estDepart(r)) return null;
     var veille = trouverVeille(r, tous); if (!veille) return null;
     var V0 = valeursRapport(p, veille), K0 = A.calculer(p, V0), o = {};
     regles.forEach(function (R) { var x = R.veille(lecteur(V0), K0); if (x != null) o[R.champ] = x; });
@@ -244,7 +244,7 @@
   /* Synthèse pour l'écran Qualité */
   function inspecter(rapports, f) {
     var retenus = A.dedoublonner(rapports).filter(function (r) {
-      return r.date >= f.debut && r.date <= f.fin && (!f.zones || !f.zones.length || f.zones.indexOf(r.zone) >= 0) && (!f.pilier || r.pilier === f.pilier);
+      return !A.estDepart(r) && r.date >= f.debut && r.date <= f.fin && (!f.zones || !f.zones.length || f.zones.indexOf(r.zone) >= 0) && (!f.pilier || r.pilier === f.pilier);
     });
     var parRapport = retenus.map(function (r) {
       var I = controlerRapport(r).filter(function (x) { return !x.ok; }), T = controlerContinuite(r, rapports).filter(function (x) { return !x.ok; });

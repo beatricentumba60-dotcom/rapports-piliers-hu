@@ -5,6 +5,7 @@
 
   function filtrer(rapports, f, pilierId) {
     return A.dedoublonner(rapports).filter(function (r) {
+      if (A.estDepart(r) && !f.cumul) return false; // valeurs de départ : seulement dans le cumul
       return (!pilierId || r.pilier === pilierId) && r.date >= f.debut && r.date <= f.fin && (!f.zones.length || f.zones.indexOf(r.zone) >= 0);
     }).sort(function (a, b) { return a.date.localeCompare(b.date) || a.zone.localeCompare(b.zone, 'fr'); });
   }
@@ -14,7 +15,7 @@
   function sectionsTexte(p) { var o = []; D.sections(p).forEach(function (s) { (s.textes || []).forEach(function (t) { o.push(t); }); }); return o; }
 
   /* ---------- Excel ---------- */
-  function excel(rapports, f) {
+  function excel(rapports, f, liens) {
     var X = root.XLSX, wb = X.utils.book_new();
     var noms = {};
     function feuille(nom, aoa, largeurs) {
@@ -31,7 +32,7 @@
       ['Période', libPeriode(f)], ['Zone', f.zone || 'Toutes les zones'], ['Pilier', f.pilier ? D.pilier(f.pilier).nom : 'Tous'],
       ['Exporté le', new Date().toLocaleString('fr-FR')], [],
       ['Feuille « Synthèse » : consolidation par pilier et par zone. Les valeurs « fin de journée » (reports, hospitalisés, stocks…) prennent le dernier jour de la période ; les autres sont additionnées.'],
-      ['Une feuille par pilier : un rapport par ligne (une ligne par zone, date et unité).'],
+      ['Une feuille par pilier : un rapport par ligne (une ligne par zone, date et unité). En cumul, les lignes « Départ » sont les valeurs de départ (cumul avant la mise en service).'],
       ['Feuilles « Défis », « Détail par PoE-PoC » et « Feedbacks CREC » : les lignes saisies dans ces tableaux.']], [22, 60]);
     // Complétude
     var cols = D.ZONES.concat([D.PROVINCE]), C = A.completude(rapports, f.fin);
@@ -65,7 +66,7 @@
       L.forEach(function (r) {
         var V = {}; A.ids(p).forEach(function (c) { var v = A.valeur(r, c.id); if (v != null) V[c.id] = v; });
         var K = A.calculer(p, V), d = r.donnees || {};
-        aoa.push([A.fr(r.date), r.zone].concat(en.map(function (e) { return (d.entete || {})[e[0]] || ''; }), [r.auteur || '', r.maj ? new Date(r.maj).toLocaleString('fr-FR') : ''],
+        aoa.push([(A.estDepart(r) ? 'Départ (cumul au ' + A.fr(r.date) + ')' : A.fr(r.date)), r.zone].concat(en.map(function (e) { return (d.entete || {})[e[0]] || ''; }), [r.auteur || '', r.maj ? new Date(r.maj).toLocaleString('fr-FR') : ''],
           ch.map(function (x) { return V[x.id] == null ? null : V[x.id]; }), ks.map(function (k) { return K[k.id]; }), tx.map(function (t) { return (d.textes || {})[t[0]] || ''; })));
       });
       var ws = feuille(p.court, aoa, [11, 16].concat(en.map(function () { return 16; }), [22, 18]));
@@ -89,6 +90,14 @@
       A.lignesListe(filtrer(rapports, f, 'crec'), 'fb').forEach(function (x) { fb.push([A.fr(x.date), x.zone, x.l.texte || '', x.l.source || '', x.l.type || '', x.l.pilier || '']); });
       if (fb.length > 1) feuille('Feedbacks CREC', fb, [11, 16, 70, 26, 14, 16]);
     }
+    // Photos des activités : légende et lien Google Drive
+    var ph = [['Pilier', 'Date', 'Zone', 'Légende', 'Auteur', 'Lien Google Drive']];
+    piliers.forEach(function (p) {
+      filtrer(rapports, f, p.id).forEach(function (r) {
+        ((r.donnees || {}).photos || []).forEach(function (x) { ph.push([p.nom, A.fr(r.date), r.zone, x.legende || '', r.auteur || '', (liens && liens[x.id]) || 'pas encore envoyée']); });
+      });
+    });
+    if (ph.length > 1) feuille('Photos', ph, [30, 11, 16, 50, 24, 50]);
     // Qualité : incohérences, ruptures avec la veille, concordance entre piliers
     var Q = root.QUALITE_PILIERS;
     if (Q) {
@@ -118,12 +127,20 @@
       return new Promise(function (res) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = function () { res(null); }; fr.readAsDataURL(b); });
     }).catch(function () { return null; });
   }
-  function diapos(rapports, f) {
-    return Promise.all([chargerEmbleme('entete-officiel.png'), chargerEmbleme('embleme-petit.png')]).then(function (e) { return diapos_(rapports, f, e[0], e[1]); });
+  function diapos(rapports, f, chargerPhoto) {
+    // Photos des rapports retenus (60 au plus), chargées avant la construction de la présentation
+    var ids = [];
+    filtrer(rapports, f).forEach(function (r) { if (!f.pilier || r.pilier === f.pilier) ((r.donnees || {}).photos || []).forEach(function (x) { ids.push(x.id); }); });
+    ids = ids.slice(0, 60);
+    var photos = {};
+    var pr = chargerPhoto ? ids.reduce(function (p, id) { return p.then(function () { return chargerPhoto(id).then(function (d) { if (d) photos[id] = d; }, function () { /* absente */ }); }); }, Promise.resolve()) : Promise.resolve();
+    return pr.then(function () { return Promise.all([chargerEmbleme('entete-officiel.png'), chargerEmbleme('embleme-petit.png')]); })
+      .then(function (e) { return diapos_(rapports, f, e[0], e[1], photos); });
   }
   // Couleurs de l'en-tête officiel du SGI MVE 17
   var OFF = { marine: '1F2A78', or: 'C9A227', rouge: 'E30613', vert: '00A651', bleu: '1D3F9A', rougeL: 'D52B1E', jaune: 'F2B705' };
-  function diapos_(rapports, f, banniere, embPetit) {
+  function diapos_(rapports, f, banniere, embPetit, photos) {
+    photos = photos || {};
     var P = new root.PptxGenJS();
     P.layout = 'LAYOUT_WIDE'; P.author = 'DPS Haut-Uélé – SGI MVE'; P.title = 'Rapports des piliers ' + libPeriode(f);
     // Seulement la date (et la zone si un filtre de zone est choisi)
@@ -273,6 +290,20 @@
         s5.addText('Planifiées', { x: 6.9, y: 1.0, w: 6, h: 0.4, fontFace: 'Arial', fontSize: 15, bold: true, color: coul });
         puces(s5, re, 1.45, H - 2.1, 0.5, 6.1); puces(s5, pl, 1.45, H - 2.1, 6.9, 6);
       }
+      // Photos d'actions : deux par diapositive, avec légende, zone et date
+      var PH = [];
+      R.forEach(function (r) { ((r.donnees || {}).photos || []).forEach(function (x) { if (photos[x.id]) PH.push({ data: photos[x.id], legende: x.legende, zone: r.zone, date: r.date }); }); });
+      morceaux(PH, 2).forEach(function (deux, i, all) {
+        if (!deux.length) return;
+        var sp = nouvelle(p.court + ' – photos d’actions' + (all.length > 1 ? ' (' + (i + 1) + '/' + all.length + ')' : ''), coul);
+        deux.forEach(function (x, k) {
+          var x0 = 0.4 + k * 6.37, w = 6.15;
+          sp.addShape(P.ShapeType.rect, { x: x0, y: 1.1, w: w, h: 4.7, fill: { color: 'F1F4F5' }, line: { color: 'F1F4F5' } });
+          sp.addImage({ data: x.data, x: x0, y: 1.1, w: w, h: 4.7, sizing: { type: 'contain', w: w, h: 4.7 } });
+          sp.addText([{ text: x.legende || 'Sans légende', options: { bold: true, breakLine: true } }, { text: x.zone + ' · ' + A.fr(x.date), options: { color: GRIS } }],
+            { x: x0, y: 5.85, w: w, h: 0.9, fontFace: 'Arial', fontSize: 12, color: '16212B', valign: 'top', fit: 'shrink' });
+        });
+      });
       var Df = A.lignesListe(R, 'defis');
       if (Df.length) {
         var s6 = nouvelle(p.court + ' – défis et actions correctrices', coul);

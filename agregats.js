@@ -30,7 +30,10 @@
     return out;
   }
   // Clé d'unicité : un seul rapport par pilier, date, zone et unité (CTE, laboratoire…) ; le plus récent gagne
+  // Valeurs de départ : cumul d'un pilier dans une zone avant la mise en service de l'application (une fiche par pilier et zone)
+  function estDepart(r) { return !!(r && r.donnees && r.donnees.depart); }
   function cleRapport(r) {
+    if (estDepart(r)) return [r.pilier, 'depart', r.zone].join('|');
     var e = (r.donnees && r.donnees.entete) || {};
     return [r.pilier, r.date, r.zone].concat(Object.keys(e).sort().map(function (k) { return k + '=' + String(e[k] || '').trim().toLowerCase(); })).join('|');
   }
@@ -45,13 +48,18 @@
   }
 
   /* Consolidation d'un pilier.
-     f = { debut, fin (AAAA-MM-JJ), zones: [] (vide = toutes) }
+     f = { debut, fin (AAAA-MM-JJ), zones: [] (vide = toutes), cumul: true pour « depuis le début » }
+     Cumul : valeurs de départ (arrêtées à la date D0, incluse) + rapports quotidiens postérieurs à D0 (pour les sommes).
      → { zones: { zone: { valeurs, rapports, dates } }, total: { valeurs }, ordre: [zones avec rapport] }
      agg 'sum' : somme sur les jours ; 'stock' : valeur du dernier jour renseigné. Entre unités d'un même jour et entre zones : somme. */
   function consolider(rapports, p, f) {
     var I = ids(p), Z = {};
-    var garde = dedoublonner(rapports).filter(function (r) {
-      return r.pilier === p.id && r.date >= f.debut && r.date <= f.fin && (!f.zones || !f.zones.length || f.zones.indexOf(r.zone) >= 0);
+    var tous = dedoublonner(rapports), dep = {};
+    if (f.cumul) tous.forEach(function (r) {
+      if (estDepart(r) && r.pilier === p.id && r.date <= f.fin && (!f.zones || !f.zones.length || f.zones.indexOf(r.zone) >= 0)) dep[r.zone] = r;
+    });
+    var garde = tous.filter(function (r) {
+      return !estDepart(r) && r.pilier === p.id && r.date >= f.debut && r.date <= f.fin && (!f.zones || !f.zones.length || f.zones.indexOf(r.zone) >= 0);
     });
     garde.forEach(function (r) {
       var z = Z[r.zone] || (Z[r.zone] = { jours: {}, rapports: [] });
@@ -59,15 +67,20 @@
       var j = z.jours[r.date] || (z.jours[r.date] = {});
       I.forEach(function (c) { var v = valeur(r, c.id); if (v != null) j[c.id] = (j[c.id] || 0) + v; });
     });
-    var out = { zones: {}, total: { valeurs: {} }, ordre: [] };
+    Object.keys(dep).forEach(function (zone) { if (!Z[zone]) Z[zone] = { jours: {}, rapports: [] }; });
+    var out = { zones: {}, total: { valeurs: {} }, ordre: [], departs: dep };
     Object.keys(Z).forEach(function (zone) {
-      var z = Z[zone], dates = Object.keys(z.jours).sort(), V = {};
+      var z = Z[zone], dates = Object.keys(z.jours).sort(), V = {}, D0 = dep[zone] ? dep[zone].date : null;
       I.forEach(function (c) {
         if (c.agg === 'stock') {
           for (var i = dates.length - 1; i >= 0; i--) if (z.jours[dates[i]][c.id] != null) { V[c.id] = z.jours[dates[i]][c.id]; break; }
-        } else dates.forEach(function (d) { var v = z.jours[d][c.id]; if (v != null) V[c.id] = (V[c.id] || 0) + v; });
+        } else {
+          // Avec une fiche de départ : seuls les jours après D0 s'ajoutent (les jours antérieurs sont déjà dans le départ)
+          dates.forEach(function (d) { if (D0 && d <= D0) return; var v = z.jours[d][c.id]; if (v != null) V[c.id] = (V[c.id] || 0) + v; });
+          if (D0) { var v0 = valeur(dep[zone], c.id); if (v0 != null) V[c.id] = (V[c.id] || 0) + v0; }
+        }
       });
-      out.zones[zone] = { valeurs: V, rapports: z.rapports, dates: dates };
+      out.zones[zone] = { valeurs: V, rapports: z.rapports, dates: dates, depart: D0 };
       Object.keys(V).forEach(function (k) { out.total.valeurs[k] = (out.total.valeurs[k] || 0) + V[k]; });
     });
     out.total.rapports = garde;
@@ -108,7 +121,7 @@
   function completude(rapports, date) {
     var o = {};
     dedoublonner(rapports).forEach(function (r) {
-      if (r.date !== date) return;
+      if (r.date !== date || estDepart(r)) return;
       var p = o[r.pilier] || (o[r.pilier] = {}); p[r.zone] = (p[r.zone] || 0) + 1;
     });
     return o;
@@ -134,7 +147,7 @@
   function decaler(j, n) { var p = j.split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return jour(d); }
   function fr(j) { if (!j) return ''; var p = j.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
 
-  var api = { colonnesCles: colonnesCles, valCol: valCol, valeur: valeur, ids: ids, cleRapport: cleRapport, dedoublonner: dedoublonner, consolider: consolider, calculer: calculer,
+  var api = { estDepart: estDepart, colonnesCles: colonnesCles, valCol: valCol, valeur: valeur, ids: ids, cleRapport: cleRapport, dedoublonner: dedoublonner, consolider: consolider, calculer: calculer,
     completude: completude, textes: textes, lignesListe: lignesListe, jour: jour, decaler: decaler, fr: fr, num: num };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AGREGATS = api;

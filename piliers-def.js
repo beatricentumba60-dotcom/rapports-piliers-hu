@@ -244,6 +244,7 @@
   var COMMUN_DEBUT = [{ id: 'saillants', titre: 'Points saillants du jour', textes: [['saillants', 'Points saillants (RAS si rien à signaler)']] }];
   var COMMUN_FIN = [
     { id: 'realisees', titre: 'Activités réalisées', textes: [['realisees', 'Activités réalisées']] },
+    { id: 'photos', titre: 'Photos des activités', photos: true },
     { id: 'defis', titre: 'Défis et actions correctrices', liste: { colonnes: [
       ['defi', 'Défi / problème', 'texte'], ['solution', 'Solution proposée', 'texte'], ['resp', 'Responsable', 'texte'], ['delai', 'Délai', 'texte']] } },
     { id: 'planifiees', titre: 'Activités planifiées', textes: [['planifiees', 'Activités planifiées pour demain']] }
@@ -272,6 +273,17 @@
     });
     return out;
   }
+  /* Formulaire des valeurs de départ : seulement ce qui s'additionne (pas de « fin de journée », pas de textes) */
+  function cumul(t) { return t.replace(/ du jour$/, '') + ' – cumul'; }
+  function sectionsDepart(p) {
+    var out = [];
+    p.sections.forEach(function (sec) {
+      if (sec.champs) { var ch = sec.champs.filter(function (c) { return (c[2] || 'sum') !== 'stock'; }); if (ch.length) out.push({ id: sec.id, titre: cumul(sec.titre), champs: ch }); }
+      if (sec.grille) { var l = sec.grille.lignes.filter(function (x) { return (x[2] || 'sum') !== 'stock'; }); if (l.length) out.push({ id: sec.id, titre: cumul(sec.titre), grille: { lignes: l, colonnes: sec.grille.colonnes, somme: sec.grille.somme } }); }
+      if (sec.liste) { var n = sec.liste.colonnes.filter(function (c) { return c[2] === 'n'; }); if (n.length) out.push({ id: sec.id + '-tot', titre: cumul(sec.titre), champs: n.map(function (c) { return [sec.id + '.' + c[0], c[1]]; }) }); }
+    });
+    return out;
+  }
   function pilier(id) { for (var i = 0; i < PILIERS.length; i++) if (PILIERS[i].id === id) return PILIERS[i]; return null; }
   function sections(p) { return COMMUN_DEBUT.concat(p.sections, COMMUN_FIN); }
   function zonesPour(p) {
@@ -281,7 +293,7 @@
   }
 
   var api = { ZONES: ZONES, PROVINCE: PROVINCE, HORS: HORS, PILIERS: PILIERS, POINTS: POINTS, COMMUN_DEBUT: COMMUN_DEBUT, COMMUN_FIN: COMMUN_FIN,
-    champs: champs, pilier: pilier, sections: sections, zonesPour: zonesPour };
+    champs: champs, pilier: pilier, sections: sections, sectionsDepart: sectionsDepart, zonesPour: zonesPour };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PILIERS_DEF = api;
 })(this);

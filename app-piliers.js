@@ -21,8 +21,13 @@
   var dbP = null;
   function db() {
     return dbP || (dbP = new Promise(function (res, rej) {
-      var rq = indexedDB.open('rapports-piliers', 1);
-      rq.onupgradeneeded = function () { rq.result.createObjectStore('rapports', { keyPath: 'id' }); rq.result.createObjectStore('kv'); };
+      var rq = indexedDB.open('rapports-piliers', 2);
+      rq.onupgradeneeded = function () {
+        var d = rq.result, n = d.objectStoreNames;
+        if (!n.contains('rapports')) d.createObjectStore('rapports', { keyPath: 'id' });
+        if (!n.contains('kv')) d.createObjectStore('kv');
+        if (!n.contains('photos')) d.createObjectStore('photos', { keyPath: 'id' }); // photos (fichier réduit + lien Drive)
+      };
       rq.onsuccess = function () { res(rq.result); }; rq.onerror = function () { rej(rq.error); };
     }));
   }
@@ -39,8 +44,99 @@
     put: function (r) { return tx('rapports', 'readwrite', function (s) { s.put(r); }); },
     putMany: function (L) { return tx('rapports', 'readwrite', function (s) { L.forEach(function (r) { s.put(r); }); }); },
     get: function (k) { return tx('kv', 'readonly', function (s) { return s.get(k); }); },
-    set: function (k, v) { return tx('kv', 'readwrite', function (s) { s.put(v, k); }); }
+    set: function (k, v) { return tx('kv', 'readwrite', function (s) { s.put(v, k); }); },
+    photo: function (id) { return tx('photos', 'readonly', function (s) { return s.get(id); }); },
+    photos: function () { return tx('photos', 'readonly', function (s) { return s.getAll(); }); },
+    photoPut: function (p) { return tx('photos', 'readwrite', function (s) { s.put(p); }); }
   };
+
+  /* ---------- Photos des activités ---------- */
+  var MAX_PHOTOS = 6, urls = {};
+  // Réduction sur le téléphone : 1280 px au plus, JPEG ~ 150–250 Ko
+  function reduire(file) {
+    return new Promise(function (res, rej) {
+      var u = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+        c.toBlob(function (b) { b ? res(b) : rej(new Error('photo illisible')); }, 'image/jpeg', 0.72);
+      };
+      img.onerror = function () { URL.revokeObjectURL(u); rej(new Error('fichier non reconnu comme image')); };
+      img.src = u;
+    });
+  }
+  function enDataURL(blob) { return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res(r.result); }; r.onerror = rej; r.readAsDataURL(blob); }); }
+  function base64EnBlob(b64, mime) { var s = atob(b64), a = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return new Blob([a], { type: mime || 'image/jpeg' }); }
+  /* Fichier d'une photo : sur ce téléphone, sinon téléchargé depuis Google Drive (puis gardé) */
+  function blobPhoto(id) {
+    if (state.photosNouvelles && state.photosNouvelles[id]) return Promise.resolve(state.photosNouvelles[id]);
+    return S.photo(id).then(function (p) {
+      if (p && p.blob) return p.blob;
+      var R = state.reglages; if (!R.url || !R.cle || !navigator.onLine) return null;
+      return appel({ action: 'photoData', id: id }).then(function (j) {
+        var b = base64EnBlob(j.data, j.mime);
+        return S.photoPut(Object.assign({ id: id }, p || {}, { blob: b, envoyee: true })).then(function () { return b; });
+      }).catch(function () { return null; });
+    });
+  }
+  function urlPhoto(id) {
+    if (urls[id]) return Promise.resolve(urls[id]);
+    return blobPhoto(id).then(function (b) { if (!b) return null; urls[id] = URL.createObjectURL(b); return urls[id]; });
+  }
+  function vignette(id, legende, sous) {
+    var img = el('img', { alt: legende || 'Photo', loading: 'lazy' }), box = el('figure', { cls: 'vign' }, [img, el('figcaption', {}, [legende ? el('b', { text: legende }) : null, sous ? el('span', { text: sous }) : null])]);
+    img.addEventListener('click', function () { if (img.src) agrandir(img.src, legende, sous); });
+    urlPhoto(id).then(function (u) { if (u) img.src = u; else box.classList.add('absente'); });
+    return box;
+  }
+  function agrandir(src, legende, sous) {
+    var o = el('div', { cls: 'zoom', role: 'dialog', 'aria-label': 'Photo' }, [el('img', { src: src, alt: legende || '' }), el('p', { text: [legende, sous].filter(Boolean).join(' · ') })]);
+    o.addEventListener('click', function () { o.remove(); }); document.body.append(o);
+  }
+  function dessinerPhotos() {
+    var host = $('#f-photos'); if (!host) return;
+    host.replaceChildren();
+    state.photos.forEach(function (ph, i) {
+      var leg = el('input', { placeholder: 'Légende (activité, lieu)', maxlength: '160', 'aria-label': 'Légende de la photo' }); leg.value = ph.legende || '';
+      leg.addEventListener('input', function () { ph.legende = leg.value; state.sale = true; });
+      var img = el('img', { alt: '' }); urlPhoto(ph.id).then(function (u) { if (u) img.src = u; });
+      host.append(el('div', { cls: 'ph' }, [img, leg, el('button', { cls: 'del', type: 'button', 'aria-label': 'Retirer la photo', text: '×', onclick: function () { state.photos.splice(i, 1); state.sale = true; dessinerPhotos(); } })]));
+    });
+    $('#btn-photo').disabled = state.photos.length >= MAX_PHOTOS;
+    $('#n-photos').textContent = state.photos.length + ' / ' + MAX_PHOTOS;
+  }
+  function ajouterPhotos(files) {
+    var L = Array.prototype.slice.call(files || []).slice(0, MAX_PHOTOS - state.photos.length);
+    if (!L.length) { toast('Au plus ' + MAX_PHOTOS + ' photos par rapport.'); return; }
+    busy(true, 'Préparation des photos…');
+    L.reduce(function (pr, f) {
+      return pr.then(function () { return reduire(f); }).then(function (b) {
+        var id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        state.photosNouvelles[id] = b; state.photos.push({ id: id, legende: '' }); state.sale = true;
+      });
+    }, Promise.resolve()).catch(function (e) { toast('Photo refusée : ' + e.message, 5000); })
+      .then(function () { busy(false); dessinerPhotos(); });
+  }
+  // Envoi des photos des rapports validés (après l'envoi des rapports)
+  function envoyerPhotos() {
+    return S.photos().then(function (L) {
+      var att = L.filter(function (p) {
+        if (p.envoyee || !p.blob) return false;
+        var r = state.rapports.find(function (x) { return x.id === p.rapportId; });
+        return r && r._etat !== 'brouillon' && !(r.donnees && r.donnees.supprime) && ((r.donnees && r.donnees.photos) || []).some(function (x) { return x.id === p.id; });
+      });
+      var n = 0;
+      return att.reduce(function (pr, p) {
+        return pr.then(function () {
+          var r = state.rapports.find(function (x) { return x.id === p.rapportId; }), m = ((r.donnees.photos) || []).find(function (x) { return x.id === p.id; }) || {};
+          return enDataURL(p.blob).then(function (data) {
+            return appel({ action: 'photo', photo: { id: p.id, rapportId: r.id, pilier: r.pilier, date: r.date, zone: r.zone, legende: m.legende || '', auteur: r.auteur || '', mime: p.blob.type || 'image/jpeg', data: data } });
+          }).then(function (j) { n++; return S.photoPut(Object.assign({}, p, { envoyee: true, lien: j.lien })); });
+        });
+      }, Promise.resolve()).then(function () { return n; });
+    });
+  }
   function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* indisponible */ } }
 
@@ -67,7 +163,7 @@
     var e = {}; (p.entete || []).forEach(function (c) { e[c[0]] = ($('#e-' + c[0]) || {}).value || ''; }); return e;
   }
   function trouverRapport(p, date, zone, entete) {
-    var cle = A.cleRapport({ pilier: p.id, date: date, zone: zone, donnees: { entete: entete } });
+    var cle = A.cleRapport({ pilier: p.id, date: date, zone: zone, donnees: { entete: entete, depart: modeDepart() } });
     var c = state.rapports.filter(function (r) { return A.cleRapport(r) === cle && !(r.donnees && r.donnees.supprime); })
       .sort(function (a, b) { return String(b.maj).localeCompare(String(a.maj)); });
     return c[0] || null;
@@ -97,8 +193,9 @@
   function construireFormulaire(p, rap) {
     var d = (rap && rap.donnees) || {}, V = d.valeurs || {}, T = d.textes || {};
     state.listes = JSON.parse(JSON.stringify(d.listes || {}));
+    state.photos = JSON.parse(JSON.stringify(d.photos || [])); state.photosNouvelles = {};
     var host = $('#f-sections'); host.replaceChildren();
-    D.sections(p).forEach(function (sec, i) {
+    (modeDepart() ? D.sectionsDepart(p) : D.sections(p)).forEach(function (sec, i) {
       var det = el('details', { cls: 'sec' }); if (i < 2) det.open = true;
       var sum = el('summary', {}, [document.createTextNode(sec.titre), el('span', { cls: 'cnt', 'data-cnt': sec.id })]);
       var body = el('div', { cls: 'sec-body' });
@@ -140,8 +237,17 @@
         }
         dessinerListe(sec);
       }
+      if (sec.photos) {
+        body.append(el('p', { cls: 'privacy', text: 'Photos des activités uniquement (sensibilisation, PCI, logistique…). Interdit : patients, contacts, défunts, corps, visages reconnaissables sans accord.' }));
+        body.append(el('div', { cls: 'phs', id: 'f-photos' }));
+        var inp = el('input', { type: 'file', accept: 'image/*', multiple: 'multiple', hidden: 'hidden', id: 'f-photo-file' });
+        inp.addEventListener('change', function () { ajouterPhotos(inp.files); inp.value = ''; });
+        body.append(inp, el('div', { cls: 'btns' }, [el('button', { cls: 'btn ghost small', type: 'button', id: 'btn-photo', text: '+ Prendre ou choisir une photo', onclick: function () { inp.click(); } }),
+          el('span', { cls: 'note', id: 'n-photos', style: 'align-self:center' })]));
+      }
       host.append(det);
     });
+    dessinerPhotos();
     majCalculs();
   }
   function dessinerListe(sec) {
@@ -176,7 +282,10 @@
       var L = (state.listes[k] || []).filter(function (x) { return Object.keys(x).some(function (c) { return x[c] != null && String(x[c]).trim() !== ''; }); });
       if (L.length) listes[k] = L;
     });
-    return { valeurs: valeurs, textes: textes, listes: listes, entete: enteteCourante(p) };
+    if (modeDepart()) return { valeurs: valeurs, textes: {}, listes: {}, entete: {}, depart: true };
+    var photos = (state.photos || []).map(function (x) { return { id: x.id, legende: (x.legende || '').trim() }; });
+    var o = { valeurs: valeurs, textes: textes, listes: listes, entete: enteteCourante(p) }; if (photos.length) o.photos = photos;
+    return o;
   }
   function majCalculs() {
     var p = pilierCourant(), d = lireFormulaire(p), tmp = { donnees: d }, V = {};
@@ -196,8 +305,9 @@
       c.textContent = n ? '· ' + n + ' renseigné' + (n > 1 ? 's' : '') : '';
     });
   }
+  function modeDepart() { return !!($('#f-depart') && $('#f-depart').checked); }
   function cleSelection() {
-    var p = pilierCourant(); return A.cleRapport({ pilier: p.id, date: $('#f-date').value, zone: $('#f-zone').value, donnees: { entete: enteteCourante(p) } });
+    var p = pilierCourant(); return A.cleRapport({ pilier: p.id, date: $('#f-date').value, zone: $('#f-zone').value, donnees: { entete: enteteCourante(p), depart: modeDepart() } });
   }
   function chargerSelection(force) {
     if (!force && cleSelection() === state._cleAff) return; // rien n'a changé (ex. : champ quitté sans modification)
@@ -209,12 +319,19 @@
     var zones = D.zonesPour(p), zv = $('#f-zone').value;
     remplir($('#f-zone'), zones, zones.indexOf(zv) >= 0 ? zv : (zones.indexOf(state.reglages.zone) >= 0 ? state.reglages.zone : zones[0]));
     $('#l-zone').textContent = p.zoneLib || 'Zone de santé';
+    var dep = modeDepart();
+    $('#f-entete').hidden = dep || !(p.entete || []).length; $('#f-depart-aide').hidden = !dep;
+    $('#l-date').textContent = dep ? 'Cumul arrêté au (inclus)' : 'Date du rapport';
+    $('#f-ctrl-card').hidden = dep;
     var rap = trouverRapport(p, $('#f-date').value, $('#f-zone').value, enteteCourante(p));
+    if (rap && dep) $('#f-date').value = rap.date;
     state.courant = rap;
     construireFormulaire(p, rap);
     state.sale = false; memoSelection(); state._cleAff = cleSelection();
     var e = $('#f-etat');
-    if (rap) e.textContent = 'Rapport existant' + (rap.auteur ? ' de ' + rap.auteur : '') + ' · ' + libEtat(rap) + '. Vos modifications le remplaceront.';
+    if (rap && dep) e.textContent = 'Valeurs de départ existantes (cumul au ' + A.fr(rap.date) + ')' + (rap.auteur ? ' de ' + rap.auteur : '') + ' · ' + libEtat(rap) + '. Vos modifications les remplaceront.';
+    else if (dep) e.textContent = 'Nouvelles valeurs de départ pour ce pilier et cette zone.';
+    else if (rap) e.textContent = 'Rapport existant' + (rap.auteur ? ' de ' + rap.auteur : '') + ' · ' + libEtat(rap) + '. Vos modifications le remplaceront.';
     else e.textContent = 'Nouveau rapport.';
     $('#btn-supprimer').hidden = !rap;
   }
@@ -226,6 +343,7 @@
   /* Contrôles en direct pendant la saisie (cohérence interne + continuité avec la veille) */
   function rapportFormulaire(p, d) { return { pilier: p.id, date: $('#f-date').value, zone: $('#f-zone').value, donnees: d }; }
   function majControles(p, d) {
+    if (d.depart) { $('#f-ctrl').replaceChildren(); $('#f-reports').hidden = true; state.ctrlErreurs = 0; return; }
     var r = rapportFormulaire(p, d), I = Q.controlerRapport(r), T = Q.controlerContinuite(r, state.rapports), host = $('#f-ctrl');
     var ko = I.filter(function (x) { return !x.ok; }), kt = T.filter(function (x) { return !x.ok; });
     host.replaceChildren();
@@ -253,17 +371,24 @@
       $('#f-ctrl-card').scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     if ($$('#f-sections input.num.err').length) { toast('Corrigez les valeurs en rouge (nombres positifs uniquement).'); $('#f-sections input.num.err').focus(); return; }
-    if ((p.entete || []).some(function (c) { return !d.entete[c[0]]; })) { toast('Indiquez : ' + p.entete.map(function (c) { return c[1]; }).join(', ') + '.'); return; }
-    if (!Object.keys(d.valeurs).length && !Object.keys(d.textes).length && !Object.keys(d.listes).length) { toast('Le rapport est vide.'); return; }
+    if (!d.depart && (p.entete || []).some(function (c) { return !d.entete[c[0]]; })) { toast('Indiquez : ' + p.entete.map(function (c) { return c[1]; }).join(', ') + '.'); return; }
+    if (!Object.keys(d.valeurs).length && !Object.keys(d.textes).length && !Object.keys(d.listes).length && !(d.photos || []).length) { toast('Le rapport est vide.'); return; }
     var ex = state.courant, r = {
       id: ex ? ex.id : uid(), pilier: p.id, date: $('#f-date').value, zone: $('#f-zone').value,
       auteur: ex && ex.auteur ? ex.auteur : (state.reglages.auteur || ''), maj: maintenant(), donnees: d,
       _etat: envoyer ? 'a_envoyer' : 'brouillon', _local: true
     };
     if (ex && ex.auteur && state.reglages.auteur && ex.auteur !== state.reglages.auteur) r.donnees.modifiePar = state.reglages.auteur;
+    // Photos nouvelles : gardées sur le téléphone, envoyées vers Google Drive à la synchronisation
+    var nouvelles = state.photosNouvelles || {};
     S.put(r).then(function () {
+      return Promise.all((d.photos || []).filter(function (x) { return nouvelles[x.id]; }).map(function (x) {
+        return S.photoPut({ id: x.id, rapportId: r.id, blob: nouvelles[x.id], envoyee: false, pilier: r.pilier, date: r.date, zone: r.zone });
+      }));
+    }).then(function () {
+      state.photosNouvelles = {};
       remplacer(r); state.courant = r; state.sale = false;
-      $('#f-etat').textContent = 'Rapport ' + libEtat(r) + '.'; $('#btn-supprimer').hidden = false;
+      $('#f-etat').textContent = (r.donnees.depart ? 'Valeurs de départ ' : 'Rapport ') + libEtat(r) + '.'; $('#btn-supprimer').hidden = false;
       majBadge();
       if (envoyer) { toast(navigator.onLine ? 'Rapport validé : envoi en cours…' : 'Rapport validé : il partira au retour du réseau.'); synchroniser(true); }
       else toast('Rapport enregistré sur le téléphone (pas encore envoyé).');
@@ -306,7 +431,9 @@
         });
       });
     }, Promise.resolve());
-    return chaine.then(function () { return tout ? '' : S.get('depuis'); }).then(function (depuis) {
+    var photosEnvoyees = 0;
+    return chaine.then(function () { return envoyerPhotos().then(function (n) { photosEnvoyees = n; }); })
+      .then(function () { return tout ? '' : S.get('depuis'); }).then(function (depuis) {
       return appel({ action: 'lire', depuis: depuis || '' });
     }).then(function (j) {
       var nouv = [];
@@ -316,10 +443,14 @@
         if (!ex || String(r.maj) >= String(ex.maj)) { var n = Object.assign({}, r, { _etat: 'envoye', _local: ex ? ex._local : false, _envoyeUneFois: true }); nouv.push(n); remplacer(n); }
       });
       recus = nouv.length;
-      return S.putMany(nouv).then(function () { return S.set('depuis', j.maintenant || ''); }).then(function () { return S.set('derniereSync', Date.now()); });
+      var metas = (j.photos || []).map(function (m) {
+        return S.photo(m.id).then(function (p) { return S.photoPut(Object.assign({}, p || {}, { id: m.id, rapportId: m.rapport, pilier: m.pilier, date: m.date, zone: m.zone, lien: m.lien, envoyee: true })); });
+      });
+      return Promise.all(metas).then(function () { return S.putMany(nouv); }).then(function () { return S.set('depuis', j.maintenant || ''); }).then(function () { return S.set('derniereSync', Date.now()); });
     }).then(function () {
       state.derniere = Date.now();
-      if (!silencieux || envoyes) toast((envoyes ? envoyes + ' rapport' + (envoyes > 1 ? 's' : '') + ' envoyé' + (envoyes > 1 ? 's' : '') + '. ' : '') +
+      if (!silencieux || envoyes || photosEnvoyees) toast((envoyes ? envoyes + ' rapport' + (envoyes > 1 ? 's' : '') + ' envoyé' + (envoyes > 1 ? 's' : '') + '. ' : '') +
+        (photosEnvoyees ? photosEnvoyees + ' photo' + (photosEnvoyees > 1 ? 's' : '') + ' envoyée' + (photosEnvoyees > 1 ? 's' : '') + '. ' : '') +
         (recus ? recus + ' rapport' + (recus > 1 ? 's' : '') + ' reçu' + (recus > 1 ? 's' : '') + '.' : (envoyes ? '' : 'Tout est à jour.')));
       if (recus || envoyes) rafraichir();
     }).catch(function (e) {
@@ -351,15 +482,16 @@
     host.replaceChildren.apply(host, L.slice(0, 200).map(function (r) {
       var p = D.pilier(r.pilier) || { nom: r.pilier, couleur: '#888' }, e = (r.donnees && r.donnees.entete) || {};
       var unite = Object.keys(e).map(function (k) { return e[k]; }).filter(Boolean).join(', ');
+      var depart = A.estDepart(r);
       var badge = r._etat === 'brouillon' ? el('span', { cls: 'badge mute', text: 'Brouillon' }) : r._etat === 'a_envoyer' ? el('span', { cls: 'badge warn', text: 'À envoyer' }) : el('span', { cls: 'badge ok', text: 'Envoyé' });
       var tag = el('span', { cls: 'pilier-tag' }, [el('i'), document.createTextNode(p.court || p.nom)]); tag.firstChild.style.background = p.couleur;
       return el('div', { cls: 'ritem', onclick: function () { ouvrirRapport(r); } }, [
-        el('div', { cls: 't' }, [tag, el('b', { text: A.fr(r.date) + ' · ' + r.zone + (unite ? ' · ' + unite : '') }), el('span', { text: (r.auteur || 'auteur inconnu') })]), badge]);
+        el('div', { cls: 't' }, [tag, el('b', { text: (depart ? 'Valeurs de départ · cumul au ' : '') + A.fr(r.date) + ' · ' + r.zone + (unite ? ' · ' + unite : '') }), el('span', { text: (r.auteur || 'auteur inconnu') })]), badge]);
     }));
   }
   function ouvrirRapport(r) {
     if (state.sale && !confirm('Des valeurs saisies ne sont pas enregistrées. Les abandonner ?')) return;
-    $('#f-pilier').value = r.pilier; $('#f-date').value = r.date;
+    $('#f-pilier').value = r.pilier; $('#f-date').value = r.date; $('#f-depart').checked = A.estDepart(r);
     state._pilierAff = null; state.courant = r; state.sale = false;
     var p = D.pilier(r.pilier); construireEntete(p, r.donnees && r.donnees.entete); state._pilierAff = p.id;
     remplir($('#f-zone'), D.zonesPour(p), r.zone);
@@ -371,7 +503,7 @@
     var fin = $('#t-date').value || A.jour(), per = $('#t-periode').value;
     var debut = per === 'tout' ? '2000-01-01' : per === '0' ? fin : A.decaler(fin, -(+per) + 1);
     var z = $('#t-zone').value;
-    return { debut: debut, fin: fin, zones: z ? [z] : [], zone: z, pilier: $('#t-pilier').value, periode: per };
+    return { debut: debut, fin: fin, zones: z ? [z] : [], zone: z, pilier: $('#t-pilier').value, periode: per, cumul: per === 'tout' };
   }
   function rendreTableau() {
     var f = filtresTableau(), R = state.rapports;
@@ -379,7 +511,9 @@
     $('#btn-pptx').textContent = pc ? 'Diapositives – ' + pc.court : 'Diapositives du jour';
     $('#btn-xlsx').textContent = pc ? 'Excel – ' + pc.court : 'Exporter en Excel';
     $('#t-info').textContent = (f.periode === '0' ? 'Rapports du ' + A.fr(f.fin) : f.periode === 'tout' ? 'Cumul jusqu’au ' + A.fr(f.fin) : 'Du ' + A.fr(f.debut) + ' au ' + A.fr(f.fin)) +
-      ' · ' + (f.zone || 'toutes les zones') + '. Les valeurs marquées « fin de journée » prennent le dernier jour, les autres s’additionnent.';
+      ' · ' + (f.zone || 'toutes les zones') + '. Les valeurs marquées « fin de journée » prennent le dernier jour, les autres s’additionnent.' +
+      (f.cumul ? ' ' + (function () { var n = A.dedoublonner(R).filter(function (r) { return A.estDepart(r) && r.date <= f.fin && (!f.pilier || r.pilier === f.pilier) && (!f.zone || r.zone === f.zone); }).length;
+        return n ? 'Le cumul inclut ' + n + ' fiche' + (n > 1 ? 's' : '') + ' de valeurs de départ.' : 'Aucune valeur de départ : le cumul ne compte que les jours saisis dans l’application.'; })() : '');
     // Complétude
     var C = A.completude(R, f.fin), cols = D.ZONES.concat([D.PROVINCE]);
     var tb = $('#t-comp'); tb.replaceChildren();
@@ -395,6 +529,7 @@
     });
     tb.append(body);
     $('#t-comp-sub').textContent = 'Rapports reçus pour le ' + A.fr(f.fin) + ' (✓2 = deux unités, par exemple deux CTE).';
+    rendreRappels(f);
     // Piliers
     var host = $('#t-piliers'); host.replaceChildren();
     D.PILIERS.filter(function (p) { return !f.pilier || p.id === f.pilier; }).forEach(function (p) {
@@ -431,6 +566,14 @@
     det.append(sm);
     det.addEventListener('toggle', function () { if (det.open && det.children.length === 1) det.append(detailPilier(p, c)); });
     box.append(det);
+    // Photos des activités
+    var PH = [];
+    c.total.rapports.forEach(function (r) { ((r.donnees || {}).photos || []).forEach(function (x) { PH.push({ id: x.id, legende: x.legende, zone: r.zone, date: r.date }); }); });
+    if (PH.length) {
+      box.append(el('h2', { text: 'Photos des activités (' + PH.length + ')', style: 'margin-top:12px;font-size:14px' }));
+      box.append(el('div', { cls: 'galerie' }, PH.slice(0, 24).map(function (x) { return vignette(x.id, x.legende, x.zone + (f.debut !== f.fin ? ' · ' + A.fr(x.date) : '')); })));
+      if (PH.length > 24) box.append(el('p', { cls: 'note', text: 'Les 24 premières photos sont affichées ; toutes sont dans les diapositives et dans Google Drive.' }));
+    }
     // Textes
     [['saillants', 'Points saillants'], ['realisees', 'Activités réalisées'], ['planifiees', 'Activités planifiées']].forEach(function (x) {
       var T = A.textes(c.total.rapports, x[0]); if (!T.length) return;
@@ -474,21 +617,76 @@
     return el('div', { cls: 'tablewrap', style: 'margin:0 12px 12px' }, [t, el('p', { cls: 'note', style: 'padding:0 8px 8px', text: '* Situation en fin de journée : dernier jour de la période.' })]);
   }
 
+  /* ---------- Rappels WhatsApp (coordination) ---------- */
+  function lienApp() { return location.origin + location.pathname.replace(/index\.html$/, ''); }
+  function chargerAnnuaire(force) {
+    var R = state.reglages;
+    if (!R.cleCoord) return Promise.resolve(null);
+    var local = state.annuaire ? Promise.resolve(state.annuaire) : S.get('annuaire').then(function (a) { state.annuaire = a || null; return state.annuaire; });
+    return local.then(function (a) {
+      if (a && !force) return a;
+      if (!R.url || !R.cle || !navigator.onLine) return a;
+      return appel({ action: 'annuaire', cleCoord: R.cleCoord, lien: lienApp() }).then(function (j) {
+        state.annuaire = { focaux: j.focaux || [], reglages: j.reglages || {}, le: Date.now() }; S.set('annuaire', state.annuaire); return state.annuaire;
+      }).catch(function () { return a; });
+    });
+  }
+  function messageRappel(fc, date) {
+    var p = D.pilier(fc.pilier);
+    return 'Bonjour ' + (fc.nom || '') + ', rappel du SGI MVE 17 – DPS Haut-Uele : le rapport du pilier ' + (p ? p.nom : fc.pilier) + ' pour la zone ' + fc.zone +
+      ' du ' + A.fr(date) + ' n’est pas encore reçu. Merci de le renseigner et de l’envoyer dans l’application « Rapports des piliers » : ' + lienApp();
+  }
+  function manquants(date, f) {
+    var a = state.annuaire; if (!a) return null;
+    var recu = {};
+    A.dedoublonner(state.rapports).forEach(function (r) { if (r.date === date && !A.estDepart(r)) recu[r.pilier + '|' + r.zone] = 1; });
+    return a.focaux.filter(function (fc) { return fc.actif && !recu[fc.pilier + '|' + fc.zone] && (!f.pilier || fc.pilier === f.pilier) && (!f.zone || fc.zone === f.zone); });
+  }
+  var rappelsFaits = {};
+  function rendreRappels(f) {
+    var card = $('#t-rappels');
+    if (!state.reglages.cleCoord) { card.hidden = true; return; }
+    card.hidden = false;
+    if (!state.annuaire) { $('#t-rap-sub').textContent = 'Chargement de l’annuaire des points focaux…'; chargerAnnuaire(true).then(function (a) { if (a) rendreRappels(f); else $('#t-rap-sub').textContent = 'Annuaire indisponible : vérifiez la clé coordination et la connexion.'; }); return; }
+    var M = manquants(f.fin, f), host = $('#t-rap-liste');
+    state.rappelsListe = M; state.rappelsDate = f.fin;
+    $('#t-rap-sub').textContent = M.length ? M.length + ' rapport' + (M.length > 1 ? 's' : '') + ' attendu' + (M.length > 1 ? 's' : '') + ' pour le ' + A.fr(f.fin) + ' et non reçu' + (M.length > 1 ? 's' : '') +
+      ' (d’après l’annuaire des points focaux). Synchronisez (⟳) avant de rappeler.' : '✓ Tous les rapports attendus pour le ' + A.fr(f.fin) + ' sont reçus.';
+    host.replaceChildren.apply(host, M.map(function (fc) {
+      var p = D.pilier(fc.pilier) || { court: fc.pilier, couleur: '#888' }, tag = el('span', { cls: 'pilier-tag' }, [el('i'), document.createTextNode(p.court)]); tag.firstChild.style.background = p.couleur;
+      var k = fc.pilier + '|' + fc.zone + '|' + f.fin;
+      var act = fc.whatsapp ? el('a', { cls: 'wa' + (rappelsFaits[k] ? ' fait' : ''), href: 'https://wa.me/' + fc.whatsapp + '?text=' + encodeURIComponent(messageRappel(fc, f.fin)), target: '_blank', rel: 'noopener',
+        text: rappelsFaits[k] ? '✓ Rappelé' : 'WhatsApp', onclick: function () { rappelsFaits[k] = 1; setTimeout(function () { rendreRappels(f); }, 300); } }) : el('span', { cls: 'badge mute', text: fc.email ? 'e-mail seulement' : 'sans numéro' });
+      return el('div', { cls: 'ritem', style: 'cursor:default' }, [el('div', { cls: 't' }, [tag, el('b', { text: fc.zone }), el('span', { text: fc.nom || 'point focal non nommé' })]), act]);
+    }));
+    var reste = M.filter(function (fc) { return fc.whatsapp && !rappelsFaits[fc.pilier + '|' + fc.zone + '|' + f.fin]; }).length;
+    $('#btn-rap-suivant').hidden = !reste; $('#btn-rap-suivant').textContent = 'Rappeler le suivant sur WhatsApp (' + reste + ' restant' + (reste > 1 ? 's' : '') + ')';
+  }
+  function rappelSuivant() {
+    var f = filtresTableau(), date = state.rappelsDate || f.fin;
+    var fc = (state.rappelsListe || []).find(function (x) { return x.whatsapp && !rappelsFaits[x.pilier + '|' + x.zone + '|' + date]; });
+    if (!fc) return;
+    rappelsFaits[fc.pilier + '|' + fc.zone + '|' + date] = 1;
+    window.open('https://wa.me/' + fc.whatsapp + '?text=' + encodeURIComponent(messageRappel(fc, date)), '_blank', 'noopener');
+    rendreRappels(f);
+  }
+
   /* ---------- Exports ---------- */
   function exporter(type) {
     var f = filtresTableau();
     if (type === 'xlsx') {
       busy(true, 'Préparation du classeur…');
       setTimeout(function () {
-        try { window.EXPORTS.excel(state.rapports, f); toast('Classeur Excel enregistré dans les téléchargements.'); }
-        catch (e) { toast('Export impossible : ' + e.message, 6000); }
-        busy(false);
+        S.photos().then(function (L) {
+          var liens = {}; L.forEach(function (p) { if (p.lien) liens[p.id] = p.lien; });
+          window.EXPORTS.excel(state.rapports, f, liens); toast('Classeur Excel enregistré dans les téléchargements.');
+        }).catch(function (e) { toast('Export impossible : ' + e.message, 6000); }).then(function () { busy(false); });
       }, 30);
       return;
     }
     busy(true, 'Préparation des diapositives…');
     chargerScript('pptxgen.bundle.js', function () { return window.PptxGenJS; }).then(function () {
-      return window.EXPORTS.diapos(state.rapports, f);
+      return window.EXPORTS.diapos(state.rapports, f, function (id) { return blobPhoto(id).then(function (b) { return b ? enDataURL(b) : null; }); });
     }).then(function () { toast('Présentation enregistrée dans les téléchargements.'); })
       .catch(function (e) { toast('Diapositives impossibles : ' + e.message, 6000); })
       .then(function () { busy(false); });
@@ -514,7 +712,7 @@
   /* ---------- Qualité ---------- */
   function filtresQualite() {
     var fin = $('#q-date').value || A.jour(), per = $('#q-periode').value, z = $('#q-zone').value;
-    return { debut: per === 'tout' ? '2000-01-01' : per === '0' ? fin : A.decaler(fin, -(+per) + 1), fin: fin, zones: z ? [z] : [], zone: z, pilier: $('#q-pilier').value, periode: per };
+    return { debut: per === 'tout' ? '2000-01-01' : per === '0' ? fin : A.decaler(fin, -(+per) + 1), fin: fin, zones: z ? [z] : [], zone: z, pilier: $('#q-pilier').value, periode: per, cumul: per === 'tout' };
   }
   function majBadgeQualite() {
     var j = A.jour(), R = Q.inspecter(state.rapports, { debut: j, fin: j, zones: [] }), n = R.erreurs + R.ecarts, b = $('#dot-qualite');
@@ -574,20 +772,22 @@
   }
   function ouvrirReglages() {
     var R = state.reglages;
-    $('#r-auteur').value = R.auteur || ''; $('#r-url').value = R.url || ''; $('#r-cle').value = R.cle || '';
+    $('#r-auteur').value = R.auteur || ''; $('#r-url').value = R.url || ''; $('#r-cle').value = R.cle || ''; $('#r-clecoord').value = R.cleCoord || '';
     remplir($('#r-pilier'), listePiliers, R.pilier || '', '—'); remplir($('#r-zone'), toutesZones, R.zone || '', '—');
     $('#r-msg').textContent = '';
     $('#sheet-bg').hidden = false; $('#sheet-reglages').hidden = false;
   }
   function fermer() { $('#sheet-bg').hidden = true; $('#sheet-reglages').hidden = true; }
   function sauverReglages() {
-    var R = { auteur: $('#r-auteur').value.trim(), url: $('#r-url').value.trim(), cle: $('#r-cle').value, pilier: $('#r-pilier').value, zone: $('#r-zone').value };
+    var R = { auteur: $('#r-auteur').value.trim(), url: $('#r-url').value.trim(), cle: $('#r-cle').value, cleCoord: $('#r-clecoord').value, pilier: $('#r-pilier').value, zone: $('#r-zone').value };
     if (R.url && !/^https:\/\/script\.google(usercontent)?\.com\//.test(R.url)) { $('#r-msg').textContent = 'L’adresse doit commencer par https://script.google.com/'; return; }
     state.reglages = R; S.set('reglages', R);
     if (!R.url || !R.cle) { $('#r-msg').textContent = 'Réglages enregistrés. Sans adresse ni clé, les rapports restent sur ce téléphone.'; return; }
     $('#r-msg').textContent = 'Test de la connexion…';
     appel({ action: 'lire', depuis: '9999' }).then(function () {
       $('#r-msg').textContent = 'Connexion réussie.'; state.erreur = null; synchroniser(false);
+      if (R.cleCoord) chargerAnnuaire(true).then(function (a) { $('#r-msg').textContent = a ? 'Connexion réussie. Annuaire des points focaux : ' + a.focaux.length + ' contact(s).' : 'Connexion réussie, mais la clé coordination est refusée.'; });
+      else { state.annuaire = null; S.set('annuaire', null); }
     }).catch(function (e) { $('#r-msg').textContent = e.message; });
   }
 
@@ -597,13 +797,13 @@
     remplir($('#l-zone'), toutesZones, '', 'Toutes les zones'); remplir($('#t-zone'), toutesZones, '', 'Toutes les zones');
     remplir($('#t-pilier'), listePiliers, '', 'Tous les piliers');
     $('#f-date').value = A.jour(); $('#t-date').value = A.jour();
-    ['#f-pilier', '#f-date', '#f-zone'].forEach(function (s) { $(s).addEventListener('change', function () { chargerSelection(); }); });
+    ['#f-pilier', '#f-date', '#f-zone', '#f-depart'].forEach(function (s) { $(s).addEventListener('change', function () { chargerSelection(); }); });
     $('#btn-brouillon').addEventListener('click', function () { enregistrer(false); });
     $('#btn-envoyer').addEventListener('click', function () { enregistrer(true); });
     $('#btn-supprimer').addEventListener('click', supprimer);
     $('#btn-nouveau').addEventListener('click', function () {
       if (state.sale && !confirm('Abandonner les valeurs non enregistrées ?')) return;
-      $('#f-date').value = A.jour(); state.sale = false; chargerSelection(true); window.scrollTo(0, 0);
+      $('#f-date').value = A.jour(); $('#f-depart').checked = false; state.sale = false; chargerSelection(true); window.scrollTo(0, 0);
     });
     $$('.tabs button').forEach(function (b) { b.addEventListener('click', function () { montrer(b.dataset.v); }); });
     ['#l-pilier', '#l-zone', '#l-qui'].forEach(function (s) { $(s).addEventListener('change', rendreListe); });
@@ -618,7 +818,9 @@
     $('#sheet-bg').addEventListener('click', fermer); $$('[data-close]').forEach(function (b) { b.addEventListener('click', fermer); });
     $('#btn-r-ok').addEventListener('click', sauverReglages);
     $('#btn-r-tout').addEventListener('click', function () { fermer(); synchroniser(false, true); });
-    $('#r-voir').addEventListener('change', function () { $('#r-cle').type = $('#r-voir').checked ? 'text' : 'password'; });
+    $('#r-voir').addEventListener('change', function () { $('#r-cle').type = $('#r-clecoord').type = $('#r-voir').checked ? 'text' : 'password'; });
+    $('#btn-rap-maj').addEventListener('click', function () { chargerAnnuaire(true).then(function (a) { toast(a ? 'Annuaire actualisé : ' + a.focaux.length + ' point(s) focal(aux).' : 'Annuaire indisponible (réseau ou clé coordination).'); rendreTableau(); }); });
+    $('#btn-rap-suivant').addEventListener('click', rappelSuivant);
     window.addEventListener('online', function () { state.erreur = null; synchroniser(true); });
     window.addEventListener('beforeunload', function (e) { if (state.sale) { e.preventDefault(); e.returnValue = ''; } });
     document.addEventListener('visibilitychange', function () {
