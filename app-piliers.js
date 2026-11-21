@@ -318,7 +318,7 @@
     if (state._pilierAff !== p.id) { construireEntete(p, state.courant && state.courant.pilier === p.id ? state.courant.donnees.entete : null); state._pilierAff = p.id; }
     var zones = D.zonesPour(p), zv = $('#f-zone').value;
     remplir($('#f-zone'), zones, zones.indexOf(zv) >= 0 ? zv : (zones.indexOf(state.reglages.zone) >= 0 ? state.reglages.zone : zones[0]));
-    $('#l-zone').textContent = p.zoneLib || 'Zone de santé';
+    $('#lab-fzone').textContent = p.zoneLib || 'Zone de santé';
     var dep = modeDepart();
     $('#f-entete').hidden = dep || !(p.entete || []).length; $('#f-depart-aide').hidden = !dep;
     $('#l-date').textContent = dep ? 'Cumul arrêté au (inclus)' : 'Date du rapport';
