@@ -142,13 +142,19 @@
     return out;
   }
 
+  /* Activités d'un texte libre : une ligne = une activité (puces et numéros retirés) */
+  function activites(t) {
+    return String(t || '').split(/\r?\n/).map(function (l) { return l.replace(/^\s*(?:[-–—•*·▪►]+|\d{1,2}\s*[.)°-])\s*/, '').trim(); })
+      .filter(function (l) { return l && !/^ras\.?$/i.test(l); });
+  }
+
   // Dates : texte AAAA-MM-JJ (heure locale)
   function jour(d) { d = d || new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function decaler(j, n) { var p = j.split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2] + n); return jour(d); }
   function fr(j) { if (!j) return ''; var p = j.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
 
   var api = { estDepart: estDepart, colonnesCles: colonnesCles, valCol: valCol, valeur: valeur, ids: ids, cleRapport: cleRapport, dedoublonner: dedoublonner, consolider: consolider, calculer: calculer,
-    completude: completude, textes: textes, lignesListe: lignesListe, jour: jour, decaler: decaler, fr: fr, num: num };
+    completude: completude, textes: textes, activites: activites, lignesListe: lignesListe, jour: jour, decaler: decaler, fr: fr, num: num };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AGREGATS = api;
 })(this);

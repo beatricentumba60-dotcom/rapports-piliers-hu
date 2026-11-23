@@ -243,11 +243,11 @@
   // Sections communes à tous les rapports (comme dans chaque présentation)
   var COMMUN_DEBUT = [{ id: 'saillants', titre: 'Points saillants du jour', textes: [['saillants', 'Points saillants (RAS si rien à signaler)']] }];
   var COMMUN_FIN = [
-    { id: 'realisees', titre: 'Activités réalisées', textes: [['realisees', 'Activités réalisées']] },
+    { id: 'realisees', titre: 'Activités réalisées', textes: [['realisees', 'Activités réalisées (une activité par ligne)']] },
     { id: 'photos', titre: 'Photos des activités', photos: true },
-    { id: 'defis', titre: 'Défis et actions correctrices', liste: { colonnes: [
-      ['defi', 'Défi / problème', 'texte'], ['solution', 'Solution proposée', 'texte'], ['resp', 'Responsable', 'texte'], ['delai', 'Délai', 'texte']] } },
-    { id: 'planifiees', titre: 'Activités planifiées', textes: [['planifiees', 'Activités planifiées pour demain']] }
+    { id: 'defis', titre: 'Défis et pistes de solution', liste: { colonnes: [
+      ['defi', 'Défi / problème', 'texte'], ['solution', 'Piste de solution', 'texte'], ['resp', 'Responsable', 'texte'], ['delai', 'Délai', 'texte']] } },
+    { id: 'planifiees', titre: 'Activités planifiées', textes: [['planifiees', 'Activités planifiées pour demain (une par ligne)']] }
   ];
 
   // PoE / PoC connus (canevas du 08/11/2026), proposés par zone
@@ -292,7 +292,26 @@
     return ZONES.concat([PROVINCE]);
   }
 
-  var api = { ZONES: ZONES, PROVINCE: PROVINCE, HORS: HORS, PILIERS: PILIERS, POINTS: POINTS, COMMUN_DEBUT: COMMUN_DEBUT, COMMUN_FIN: COMMUN_FIN,
+  /* Aires de santé par zone et population 2026 (DHIS2 SNIS RDC, extraction du 12/11/2026 ; 213 aires) */
+  var AIRES = {
+    Aba: [["Aba", 37803], ["Atadra", 8140], ["Ataki", 7259], ["Baki", 6484], ["Bele Patarua", 12636], ["Dramba", 18791], ["Kamiru", 6996], ["Kitambala", 23380], ["Kurukwata", 9687], ["Lagabe", 12986], ["Lipara", 11622], ["Massabe", 10072], ["Nyalanya", 34642], ["Nyari", 5458], ["Tayo", 11929], ["Todro", 8587]],
+    "Boma Mangbetu": [["Adedo", 7432], ["Adjangwe", 9679], ["Badamoni", 11360], ["Bafwabaka", 10509], ["Bakangi", 9219], ["Bavamasia", 9967], ["Bevesieni", 10508], ["Boma Mangbetu", 13531], ["Gombe", 11644], ["Legu", 10326], ["Mataku", 8664], ["Nambose", 9621], ["Obongoni", 15323], ["Yamo", 14186]],
+    Doruma: [["Bangadi", 23957], ["Diagbe", 6341], ["Diebio", 1718], ["Doruma", 17684], ["Gangala", 9821], ["Kana", 1558], ["Kapili", 1287], ["Masombo", 5033], ["Naparka", 5103], ["Napopo", 2763], ["Ngilima", 17594], ["Weneki", 3774]],
+    Dungu: [["Afu", 5679], ["Bakote", 20153], ["Bamokandi", 13138], ["Biodi", 4437], ["Bitima", 6979], ["Dungu May", 4812], ["Dungu Uye", 19285], ["Duru", 5037], ["Kiliwa", 4387], ["Kosa", 13675], ["Kpekpele", 7163], ["Li Pay", 7092], ["Li Uye", 7040], ["Mangese", 25314], ["Mbadainga", 5489], ["Musa", 16772], ["Nango", 5203], ["Ndedu", 8941], ["Sambia", 30933], ["Wandote", 25467]],
+    Faradje: [["Akua", 9619], ["CECA 20 Faradje", 10367], ["CECA 20 Tadu", 16507], ["Djabir", 10550], ["Doya", 8735], ["Faradje", 19354], ["Katanga", 7798], ["Kirima", 4780], ["Koreri", 4612], ["Kpodo", 10497], ["Kurukwata", 10389], ["Nzopi", 9949], ["Obi", 7336], ["Sabuni", 9916], ["Sesenge", 10199], ["Tadu", 12139], ["Tandro", 11079], ["Tomati", 6309]],
+    Gombari: [["Abakudu", 5191], ["Akpandau", 9346], ["Apodo", 12057], ["Baitebi", 9303], ["Bakiri", 9998], ["Gombari", 13473], ["Goria", 22725], ["Kossia", 5719], ["Madja", 9250], ["Nepoko", 5085], ["Ngazizi", 8513], ["Tangi", 12537], ["Tibodri", 8907], ["Tora", 12530], ["Wanga", 22892]],
+    Isiro: [["Arindru", 10001], ["Bunie", 13172], ["Djombe", 11279], ["Egbunda", 12341], ["Gamba", 27072], ["Gossamu", 20439], ["Makpulu", 17612], ["Mayogo", 56168], ["Mbene", 11684], ["Medje", 28427], ["N'sele", 25360], ["Nagwa", 9384], ["Nangosira", 10668], ["Nduka", 9133], ["Neisu", 26316], ["Nembombi", 14122], ["Nolua", 13725], ["Telalingbi", 12950], ["Tely", 36219], ["Tuluba", 32849]],
+    Makoro: [["Abimva", 27884], ["Ambarau", 14952], ["Bhamo", 23486], ["Bovi", 37383], ["Kamiro", 15540], ["Kana", 16386], ["Kilima", 12222], ["Kiraka", 15572], ["Lanza", 21596], ["Makoro", 35869], ["Mariaba", 13911], ["Maulo", 6206], ["Ndolomo", 22048], ["Ngili", 11720], ["Rangu", 7857]],
+    Niangara: [["Arikazi", 8741], ["Babagu", 12304], ["Ekibondo", 10461], ["Galagala", 9928], ["Ganga", 10209], ["Ligunza", 12993], ["Lipombo", 14102], ["Makilingbo", 8491], ["Mangada", 6436], ["Mangalu", 9547], ["Nambia", 5198], ["Nangbama", 7707], ["Ndingba", 10167], ["Tapili", 9962], ["Wamba Moke", 10577], ["Wawe", 8666]],
+    Pawa: [["Abiangama", 12456], ["Babia", 10881], ["Babonde", 14811], ["Bachenze", 8820], ["Bamoka", 11036], ["Bavamabutu", 10433], ["Budubudu", 9329], ["Digi", 9681], ["Etakamokongo", 10701], ["Fungula", 13908], ["Gatoa", 11121], ["Gbonzunzu", 12512], ["Ibambi Cecca 16", 16365], ["Ibambi Etat", 15122], ["Likasi", 10298], ["Matibika", 11751], ["Nebobongo", 18991], ["Pawa", 18886]],
+    Rungu: [["Badolo", 9527], ["Bala", 14881], ["Bodjo", 9780], ["Kabome", 10600], ["Kpetele", 12610], ["Mambunga", 9680], ["Nala", 9465], ["Nangazizi", 16458], ["Nekalagba", 7627], ["Nepomeda", 11352], ["Nesira", 11558], ["Ngabi", 10495], ["Rungu", 14541], ["Vube", 12775]],
+    Wamba: [["Abanagomu", 12399], ["Abiba", 12347], ["Agbau", 11479], ["Asamboa", 8100], ["Bakandja", 25052], ["Bakhita", 7052], ["Bavemo", 9773], ["Bayenga", 14363], ["Betongwe", 12616], ["Bindani Bagoya", 9174], ["Bole Bole", 22122], ["Bomana", 8130], ["CECCA 16", 8706], ["Maboma", 10135], ["Mama Kayenga", 12230], ["Mambati", 16420], ["Tshaka Tshaka", 9475]],
+    Watsa: [["Arumbi", 29198], ["Bethanie", 43188], ["Dilolo", 24969], ["Doko", 32229], ["Dubele", 24968], ["Durba", 28438], ["Gambela", 21201], ["Ganoza", 33412], ["Gatanga", 32289], ["Kibali", 44941], ["Kokoro", 14014], ["Maba", 8616], ["Maitulu", 27807], ["Moku", 32977], ["Monama", 30610], ["Monya", 29205], ["Ngangazo", 24072], ["Toyota", 72736]]
+  };
+  function aires(zone) { return (AIRES[zone] || []).map(function (a) { return a[0]; }); }
+  function populationAire(zone, aire) { var a = (AIRES[zone] || []).find(function (x) { return x[0] === aire; }); return a ? a[1] : null; }
+
+  var api = { ZONES: ZONES, PROVINCE: PROVINCE, HORS: HORS, PILIERS: PILIERS, POINTS: POINTS, COMMUN_DEBUT: COMMUN_DEBUT, COMMUN_FIN: COMMUN_FIN, AIRES: AIRES, aires: aires, populationAire: populationAire,
     champs: champs, pilier: pilier, sections: sections, sectionsDepart: sectionsDepart, zonesPour: zonesPour };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PILIERS_DEF = api;

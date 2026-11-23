@@ -98,13 +98,27 @@
     var host = $('#f-photos'); if (!host) return;
     host.replaceChildren();
     state.photos.forEach(function (ph, i) {
-      var leg = el('input', { placeholder: 'Légende (activité, lieu)', maxlength: '160', 'aria-label': 'Légende de la photo' }); leg.value = ph.legende || '';
+      var leg = el('input', { placeholder: 'Légende (lieu, détail)', maxlength: '160', 'aria-label': 'Légende de la photo' }); leg.value = ph.legende || '';
       leg.addEventListener('input', function () { ph.legende = leg.value; state.sale = true; });
       var img = el('img', { alt: '' }); urlPhoto(ph.id).then(function (u) { if (u) img.src = u; });
-      host.append(el('div', { cls: 'ph' }, [img, leg, el('button', { cls: 'del', type: 'button', 'aria-label': 'Retirer la photo', text: '×', onclick: function () { state.photos.splice(i, 1); state.sale = true; dessinerPhotos(); } })]));
+      var act = el('select', { cls: 'act', 'aria-label': 'Activité correspondante' });
+      act.addEventListener('change', function () { ph.activite = act.value; state.sale = true; });
+      host.append(el('div', { cls: 'ph' }, [img, act, leg, el('button', { cls: 'del', type: 'button', 'aria-label': 'Retirer la photo', text: '×', onclick: function () { state.photos.splice(i, 1); state.sale = true; dessinerPhotos(); } })]));
     });
+    majActivitesPhotos();
     $('#btn-photo').disabled = state.photos.length >= MAX_PHOTOS;
     $('#n-photos').textContent = state.photos.length + ' / ' + MAX_PHOTOS;
+  }
+  /* Chaque photo est rattachée à une activité réalisée (une ligne du champ « Activités réalisées ») */
+  function majActivitesPhotos() {
+    var ta = $('#t-realisees'), L = A.activites(ta ? ta.value : '');
+    $$('#f-photos select.act').forEach(function (sel, i) {
+      var ph = state.photos[i]; if (!ph) return;
+      var opts = [el('option', { value: '', text: L.length ? '— Activité correspondante —' : '— Saisissez d’abord les activités réalisées —' })];
+      L.forEach(function (a, k) { opts.push(el('option', { value: a, text: (k + 1) + '. ' + (a.length > 70 ? a.slice(0, 68) + '…' : a) })); });
+      if (ph.activite && L.indexOf(ph.activite) < 0) opts.push(el('option', { value: ph.activite, text: '(activité modifiée) ' + ph.activite.slice(0, 60) }));
+      sel.replaceChildren.apply(sel, opts); sel.value = ph.activite || '';
+    });
   }
   function ajouterPhotos(files) {
     var L = Array.prototype.slice.call(files || []).slice(0, MAX_PHOTOS - state.photos.length);
@@ -194,6 +208,7 @@
     var d = (rap && rap.donnees) || {}, V = d.valeurs || {}, T = d.textes || {};
     state.listes = JSON.parse(JSON.stringify(d.listes || {}));
     state.photos = JSON.parse(JSON.stringify(d.photos || [])); state.photosNouvelles = {};
+    state.aires = JSON.parse(JSON.stringify(d.aires || {})); state.vueAire = ''; state.valsZone = null;
     var host = $('#f-sections'); host.replaceChildren();
     (modeDepart() ? D.sectionsDepart(p) : D.sections(p)).forEach(function (sec, i) {
       var det = el('details', { cls: 'sec' }); if (i < 2) det.open = true;
@@ -225,6 +240,7 @@
       if (sec.textes) sec.textes.forEach(function (t) {
         var ta = el('textarea', { id: 't-' + t[0], 'data-txt': t[0] }); ta.value = T[t[0]] || '';
         ta.addEventListener('input', function () { state.sale = true; });
+        if (t[0] === 'realisees') ta.addEventListener('change', majActivitesPhotos);
         body.append(el('div', { cls: 'field' }, [el('label', { for: ta.id, text: t[1] }), ta]));
       });
       if (sec.liste) {
@@ -276,15 +292,20 @@
   }
   function lireFormulaire(p) {
     var valeurs = {}, textes = {}, listes = {};
-    $$('#f-sections input.num').forEach(function (i) { var v = A.num(i.value.trim()); if (i.value.trim() !== '' && v != null) valeurs[i.dataset.id] = v; });
+    if (modeAire()) {
+      capturerVue();
+      valeurs = Object.assign({}, state.valsZone || {});
+      var SA = sommesAires(); Object.keys(SA).forEach(function (id) { valeurs[id] = SA[id]; });
+    } else $$('#f-sections input.num').forEach(function (i) { var v = A.num(i.value.trim()); if (i.value.trim() !== '' && v != null) valeurs[i.dataset.id] = v; });
     $$('#f-sections textarea[data-txt]').forEach(function (t) { if (t.value.trim()) textes[t.dataset.txt] = t.value.trim(); });
     Object.keys(state.listes).forEach(function (k) {
       var L = (state.listes[k] || []).filter(function (x) { return Object.keys(x).some(function (c) { return x[c] != null && String(x[c]).trim() !== ''; }); });
       if (L.length) listes[k] = L;
     });
     if (modeDepart()) return { valeurs: valeurs, textes: {}, listes: {}, entete: {}, depart: true };
-    var photos = (state.photos || []).map(function (x) { return { id: x.id, legende: (x.legende || '').trim() }; });
+    var photos = (state.photos || []).map(function (x) { var o = { id: x.id, legende: (x.legende || '').trim() }; if (x.activite) o.activite = x.activite; return o; });
     var o = { valeurs: valeurs, textes: textes, listes: listes, entete: enteteCourante(p) }; if (photos.length) o.photos = photos;
+    if (modeAire()) { var AI = airesNonVides(); if (Object.keys(AI).length) o.aires = AI; }
     return o;
   }
   function majCalculs() {
@@ -304,6 +325,73 @@
         + (sec.liste ? (d.listes[sec.id] || []).length : 0);
       c.textContent = n ? '· ' + n + ' renseigné' + (n > 1 ? 's' : '') : '';
     });
+  }
+  /* ---------- Saisie facultative par aire de santé ----------
+     Les champs numériques qui s'additionnent peuvent être saisis aire par aire ; le total de la zone en est la somme.
+     Les situations de fin de journée (*), les listes, les textes et les photos restent au niveau de la zone. */
+  function modeAire() { return !!($('#f-par-aire') && $('#f-par-aire').checked && !$('#f-aires-card').hidden); }
+  function idsParAire(p) { var o = {}; D.champs(p).forEach(function (c) { if (c.agg !== 'stock') o[c.id] = true; }); return o; }
+  function airesNonVides() {
+    var o = {}; Object.keys(state.aires || {}).forEach(function (a) { var V = state.aires[a] || {}, k = Object.keys(V).filter(function (id) { return V[id] != null; }); if (k.length) { o[a] = {}; k.forEach(function (id) { o[a][id] = V[id]; }); } });
+    return o;
+  }
+  function sommesAires() {
+    var t = {}; Object.keys(state.aires || {}).forEach(function (a) { var V = state.aires[a] || {}; Object.keys(V).forEach(function (id) { if (V[id] != null) t[id] = (t[id] || 0) + V[id]; }); });
+    return t;
+  }
+  function lireInputs(filtre) {
+    var V = {}; $$('#f-sections input.num').forEach(function (i) { if (filtre && !filtre(i)) return; var v = A.num(i.value.trim()); if (i.value.trim() !== '' && v != null) V[i.dataset.id] = v; }); return V;
+  }
+  // Mémorise les valeurs affichées dans la vue courante (zone ou aire)
+  function capturerVue() {
+    var el0 = idsParAire(pilierCourant());
+    if (state.vueAire) state.aires[state.vueAire] = lireInputs(function (i) { return el0[i.dataset.id]; });
+    else state.valsZone = lireInputs(function (i) { return !i.readOnly; });
+  }
+  function afficherVue(a) {
+    var p = pilierCourant(), el0 = idsParAire(p), SA = sommesAires(), V = a ? (state.aires[a] || {}) : (state.valsZone || {});
+    state.vueAire = a;
+    $('#f-sections').classList.toggle('mode-aire', !!a);
+    $$('#f-sections input.num').forEach(function (i) {
+      var id = i.dataset.id, somme = !a && SA[id] != null, seule = a && !el0[id], v = a ? (seule ? null : V[id]) : (somme ? SA[id] : V[id]);
+      i.value = v == null ? '' : String(v).replace('.', ',');
+      i.readOnly = somme || seule; i.classList.toggle('somme', somme); i.classList.toggle('zone-seule', !!seule);
+      i.title = somme ? 'Somme des aires de santé' : seule ? 'À renseigner au niveau de la zone (situation du jour)' : '';
+      verifNum(i);
+    });
+    $('#f-aire').value = a;
+    var nA = Object.keys(airesNonVides()).length;
+    $('#f-aire-aide').textContent = a
+      ? 'Aire de santé ' + a + (D.populationAire($('#f-zone').value, a) ? ' (population 2026 : ' + D.populationAire($('#f-zone').value, a).toLocaleString('fr-FR') + ')' : '') + ' : saisissez les valeurs du jour de cette aire. Les champs grisés, les textes, les listes et les photos se renseignent dans « Total de la zone ».'
+      : (nA ? 'Total de la zone : les champs en vert sont la somme des ' + nA + ' aire' + (nA > 1 ? 's' : '') + ' renseignée' + (nA > 1 ? 's' : '') + ' (non modifiables ici). Les autres champs se saisissent directement.' : 'Choisissez une aire de santé pour saisir ses valeurs ; le total de la zone sera calculé automatiquement.');
+    dessinerChipsAires();
+  }
+  function dessinerChipsAires() {
+    var host = $('#f-aires-chips'), AI = airesNonVides(), L = D.aires($('#f-zone').value);
+    host.replaceChildren.apply(host, [['', 'Total de la zone']].concat(L.map(function (a) { return [a, a]; })).map(function (x) {
+      return el('button', { type: 'button', cls: (x[0] === state.vueAire ? 'cur ' : '') + (x[0] && AI[x[0]] ? 'ok' : ''), text: (x[0] && AI[x[0]] ? '✓ ' : '') + x[1],
+        onclick: function () { changerAire(x[0]); } });
+    }));
+  }
+  function changerAire(a) { capturerVue(); afficherVue(a); majCalculs(); }
+  function initAires(p, rap, dep) {
+    var L = D.aires($('#f-zone').value), card = $('#f-aires-card');
+    card.hidden = dep || !L.length;
+    remplir($('#f-aire'), [['', 'Total de la zone']].concat(L.map(function (a) { return [a, a]; })), '');
+    var on = !card.hidden && Object.keys(airesNonVides()).length > 0;
+    $('#f-par-aire').checked = on; $('#f-aires-zone').hidden = !on;
+    $('#f-sections').classList.remove('mode-aire');
+    if (on) { state.valsZone = lireInputs(); var SA = sommesAires(); Object.keys(SA).forEach(function (id) { delete state.valsZone[id]; }); afficherVue(''); }
+  }
+  function basculerAire() {
+    var on = $('#f-par-aire').checked;
+    if (on) { state.aires = state.aires || {}; state.valsZone = lireInputs(); $('#f-aires-zone').hidden = false; afficherVue(''); return; }
+    var AI = airesNonVides();
+    if (Object.keys(AI).length && !confirm('Les valeurs saisies par aire de santé seront retirées ; les totaux de la zone sont conservés. Continuer ?')) { $('#f-par-aire').checked = true; return; }
+    capturerVue(); var V = Object.assign({}, state.valsZone || {}), SA = sommesAires(); Object.keys(SA).forEach(function (id) { V[id] = SA[id]; });
+    state.aires = {}; state.vueAire = ''; $('#f-aires-zone').hidden = true; $('#f-sections').classList.remove('mode-aire');
+    $$('#f-sections input.num').forEach(function (i) { var v = V[i.dataset.id]; i.value = v == null ? '' : String(v).replace('.', ','); i.readOnly = false; i.classList.remove('somme', 'zone-seule'); i.title = ''; });
+    state.sale = true; majCalculs();
   }
   function modeDepart() { return !!($('#f-depart') && $('#f-depart').checked); }
   function cleSelection() {
@@ -328,12 +416,15 @@
     state.courant = rap;
     construireFormulaire(p, rap);
     state.sale = false; memoSelection(); state._cleAff = cleSelection();
+    state.ctrlSignales = {}; (state.ctrlPb || []).forEach(function (x) { state.ctrlSignales[x.cle] = 1; });
     var e = $('#f-etat');
     if (rap && dep) e.textContent = 'Valeurs de départ existantes (cumul au ' + A.fr(rap.date) + ')' + (rap.auteur ? ' de ' + rap.auteur : '') + ' · ' + libEtat(rap) + '. Vos modifications les remplaceront.';
     else if (dep) e.textContent = 'Nouvelles valeurs de départ pour ce pilier et cette zone.';
     else if (rap) e.textContent = 'Rapport existant' + (rap.auteur ? ' de ' + rap.auteur : '') + ' · ' + libEtat(rap) + '. Vos modifications le remplaceront.';
     else e.textContent = 'Nouveau rapport.';
     $('#btn-supprimer').hidden = !rap;
+    $('#f-pptx-zone').hidden = !rap || dep;
+    initAires(p, rap, dep);
   }
   var selMemo = {};
   function memoSelection() { selMemo = { p: $('#f-pilier').value, d: $('#f-date').value, z: $('#f-zone').value }; }
@@ -349,8 +440,15 @@
     host.replaceChildren();
     ko.forEach(function (x) { host.append(el('li', { cls: x.regle.grav }, [el('b', { text: (x.regle.grav === 'erreur' ? 'Incohérence : ' : 'À vérifier : ') + x.regle.lib }), x.a != null || x.b != null ? el('small', { text: 'Valeurs : ' + Q.nb(x.a) + ' / ' + Q.nb(x.b) }) : null])); });
     kt.forEach(function (x) { host.append(el('li', { cls: 'alerte' }, [el('b', { text: 'Continuité : ' + x.regle.lib }), el('small', { text: 'Saisi : ' + Q.nb(x.a) + ' · d’après le rapport d’hier : ' + Q.nb(x.b) })])); });
-    var n = I.length + T.length;
-    if (!ko.length && !kt.length) host.append(el('li', { cls: 'ok', text: n ? '✓ ' + n + ' contrôle' + (n > 1 ? 's' : '') + ' respecté' + (n > 1 ? 's' : '') + '.' : 'Les contrôles s’afficheront au fil de la saisie.' }));
+    // Concordance avec les autres piliers (même zone, même jour), le formulaire en cours remplaçant le rapport enregistré
+    var KC = concordancesSaisie(p, r);
+    KC.ecarts.forEach(function (x) {
+      host.append(el('li', { cls: 'ecart' }, [el('b', { text: 'Écart avec ' + x.autres + ' : ' + x.regle.lib }),
+        el('small', { text: x.regle.a.lib + ' : ' + Q.nb(x.a) + ' · ' + x.regle.b.lib + ' : ' + Q.nb(x.b) + (x.regle.aide ? ' — ' + x.regle.aide : '') })]));
+    });
+    KC.attente.forEach(function (x) { host.append(el('li', { cls: 'attente', text: 'Comparaison en attente du rapport ' + x.autres + ' du jour : ' + x.regle.lib + '.' })); });
+    var n = I.length + T.length + KC.ok;
+    if (!ko.length && !kt.length && !KC.ecarts.length) host.append(el('li', { cls: 'ok', text: n ? '✓ ' + n + ' contrôle' + (n > 1 ? 's' : '') + ' respecté' + (n > 1 ? 's' : '') + '.' : 'Les contrôles s’afficheront au fil de la saisie.' }));
     // Reports proposés d'après la veille
     var RP = Q.reportsProposes(r, state.rapports), box = $('#f-reports');
     var diff = RP && Object.keys(RP.valeurs).filter(function (id) { return d.valeurs[id] !== RP.valeurs[id]; });
@@ -364,10 +462,48 @@
           state.sale = true; majCalculs(); toast('Reports repris du rapport d’hier.'); } }));
     }
     state.ctrlErreurs = ko.filter(function (x) { return x.regle.grav === 'erreur'; }).length;
+    // Signal toujours visible pendant la saisie + liste des anomalies pour la réaction immédiate
+    var pb = ko.map(function (x) { return { cle: 'i:' + x.regle.id, grav: x.regle.grav, txt: (x.regle.grav === 'erreur' ? 'Incohérence : ' : 'À vérifier : ') + x.regle.lib }; })
+      .concat(kt.map(function (x) { return { cle: 't:' + x.regle.id, grav: 'alerte', txt: 'Continuité avec hier : ' + x.regle.lib }; }))
+      .concat(KC.ecarts.map(function (x) { return { cle: 'c:' + x.regle.id, grav: 'alerte', txt: 'Écart avec ' + x.autres + ' : ' + x.regle.lib }; }));
+    state.ctrlPb = pb;
+    var ba = $('#f-ctrl-alerte');
+    ba.hidden = !pb.length;
+    document.body.classList.toggle('ctrl-on', !!pb.length && state.vue === 'saisir');
+    if (pb.length) {
+      ba.className = 'ctrl-alerte' + (pb.some(function (x) { return x.grav === 'erreur'; }) ? ' erreur' : '');
+      ba.replaceChildren(document.createTextNode('⚠ ' + pb.length + ' anomalie' + (pb.length > 1 ? 's' : '') + ' dans ce rapport – voir le détail'), el('small', { text: pb[0].txt + (pb.length > 1 ? ' (+ ' + (pb.length - 1) + ')' : '') }));
+    }
+  }
+  function concordancesSaisie(p, r) {
+    var out = { ecarts: [], attente: [], ok: 0 };
+    if (!Q.concordances || D.ZONES.indexOf(r.zone) < 0) return out;
+    var cle = A.cleRapport(r), moi = Object.assign({ id: (state.courant && state.courant.id) || 'saisie', maj: '9999' }, r);
+    var L = state.rapports.filter(function (x) { return A.cleRapport(x) !== cle; }).concat([moi]);
+    var nomP = function (id) { return [].concat(id).filter(function (x) { return x !== p.id; }).map(function (x) { var q = D.pilier(x); return q ? q.court : x; }).join(' et '); };
+    Q.concordances(L, { debut: r.date, fin: r.date, zones: [r.zone] }).forEach(function (x) {
+      var ids = [].concat(x.regle.a.pilier, x.regle.b.pilier);
+      if (ids.indexOf(p.id) < 0 || x.zone === 'Total' && !x.regle.province) return;
+      // Côté du pilier en cours : on ne compare qu'une fois ses chiffres saisis
+      var saisi = [x.regle.a, x.regle.b].some(function (c) { return (c.parts || [[c.pilier, c.ids]]).some(function (pt) { return pt[0] === p.id && (pt[1] || []).some(function (id) { return A.valeur(r, id) != null; }); }); });
+      if (!saisi) return;
+      var y = Object.assign({ autres: nomP(ids) || 'le même pilier' }, x);
+      if (x.statut === 'ecart') out.ecarts.push(y);
+      else if (x.statut === 'manque') { if (x.manque.indexOf(p.id) < 0) out.attente.push(y); }
+      else out.ok++;
+    });
+    return out;
+  }
+  // Réaction immédiate : à chaque valeur saisie, signale toute nouvelle anomalie
+  function signalerNouvelles() {
+    var deja = state.ctrlSignales || {}, nv = (state.ctrlPb || []).filter(function (x) { return !deja[x.cle]; });
+    state.ctrlSignales = {}; (state.ctrlPb || []).forEach(function (x) { state.ctrlSignales[x.cle] = 1; });
+    if (nv.length) toast('⚠ ' + nv[0].txt + (nv.length > 1 ? ' (+ ' + (nv.length - 1) + ' autre' + (nv.length > 2 ? 's' : '') + ')' : ''), 6000);
   }
   function enregistrer(envoyer) {
     var p = pilierCourant(), d = lireFormulaire(p);
-    if (envoyer && state.ctrlErreurs && !confirm(state.ctrlErreurs + ' incohérence' + (state.ctrlErreurs > 1 ? 's' : '') + ' dans ce rapport (voir « Contrôles de cohérence »). Envoyer quand même ?')) {
+    var nPb = (state.ctrlPb || []).length;
+    if (envoyer && nPb && !confirm(nPb + ' anomalie' + (nPb > 1 ? 's' : '') + ' dans ce rapport, dont ' + (state.ctrlErreurs || 0) + ' incohérence' + ((state.ctrlErreurs || 0) > 1 ? 's' : '') + ' (voir « Contrôles de cohérence »). Envoyer quand même ?')) {
       $('#f-ctrl-card').scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     if ($$('#f-sections input.num.err').length) { toast('Corrigez les valeurs en rouge (nombres positifs uniquement).'); $('#f-sections input.num.err').focus(); return; }
@@ -389,6 +525,7 @@
       state.photosNouvelles = {};
       remplacer(r); state.courant = r; state.sale = false;
       $('#f-etat').textContent = (r.donnees.depart ? 'Valeurs de départ ' : 'Rapport ') + libEtat(r) + '.'; $('#btn-supprimer').hidden = false;
+      $('#f-pptx-zone').hidden = !!r.donnees.depart;
       majBadge();
       if (envoyer) { toast(navigator.onLine ? 'Rapport validé : envoi en cours…' : 'Rapport validé : il partira au retour du réseau.'); synchroniser(true); }
       else toast('Rapport enregistré sur le téléphone (pas encore envoyé).');
@@ -443,6 +580,7 @@
         if (!ex || String(r.maj) >= String(ex.maj)) { var n = Object.assign({}, r, { _etat: 'envoye', _local: ex ? ex._local : false, _envoyeUneFois: true }); nouv.push(n); remplacer(n); }
       });
       recus = nouv.length;
+      if (recus && $('#f-sections input.num')) setTimeout(function () { try { majCalculs(); } catch (e) { /* formulaire absent */ } }, 0); // concordance avec les rapports reçus
       var metas = (j.photos || []).map(function (m) {
         return S.photo(m.id).then(function (p) { return S.photoPut(Object.assign({}, p || {}, { id: m.id, rapportId: m.rapport, pilier: m.pilier, date: m.date, zone: m.zone, lien: m.lien, envoyee: true })); });
       });
@@ -508,7 +646,7 @@
   function rendreTableau() {
     var f = filtresTableau(), R = state.rapports;
     var pc = f.pilier ? D.pilier(f.pilier) : null;
-    $('#btn-pptx').textContent = pc ? 'Diapositives – ' + pc.court : 'Diapositives du jour';
+    $('#btn-pptx').textContent = pc ? 'Diapositives – ' + pc.court : 'Diapositives par pilier (zip)';
     $('#btn-xlsx').textContent = pc ? 'Excel – ' + pc.court : 'Exporter en Excel';
     $('#t-info').textContent = (f.periode === '0' ? 'Rapports du ' + A.fr(f.fin) : f.periode === 'tout' ? 'Cumul jusqu’au ' + A.fr(f.fin) : 'Du ' + A.fr(f.debut) + ' au ' + A.fr(f.fin)) +
       ' · ' + (f.zone || 'toutes les zones') + '. Les valeurs marquées « fin de journée » prennent le dernier jour, les autres s’additionnent.' +
@@ -696,11 +834,55 @@
       }, 30);
       return;
     }
+    var charger = function (id) { return blobPhoto(id).then(function (b) { return b ? enDataURL(b) : null; }); };
+    if (f.pilier) {
+      busy(true, 'Préparation des diapositives…');
+      chargerScript('pptxgen.bundle.js', function () { return window.PptxGenJS; }).then(function () {
+        return window.EXPORTS.diapos(state.rapports, f, charger);
+      }).then(function () { toast('Présentation enregistrée dans les téléchargements.'); })
+        .catch(function (e) { toast('Diapositives impossibles : ' + e.message, 6000); })
+        .then(function () { busy(false); });
+      return;
+    }
+    // Tous les piliers : un rapport de la coordination par pilier (page de garde « Pilier … »), réunis dans un fichier zip
+    var avec = D.PILIERS.filter(function (p) { return A.consolider(state.rapports, p, f).ordre.length; });
+    if (!avec.length) { toast('Aucun rapport sur cette période.'); return; }
+    var fichiers = [];
     busy(true, 'Préparation des diapositives…');
     chargerScript('pptxgen.bundle.js', function () { return window.PptxGenJS; }).then(function () {
-      return window.EXPORTS.diapos(state.rapports, f, function (id) { return blobPhoto(id).then(function (b) { return b ? enDataURL(b) : null; }); });
-    }).then(function () { toast('Présentation enregistrée dans les téléchargements.'); })
-      .catch(function (e) { toast('Diapositives impossibles : ' + e.message, 6000); })
+      return chargerScript('jszip.min.js', function () { return window.JSZip; });
+    }).then(function () {
+      return avec.reduce(function (pr, p, i) {
+        return pr.then(function () {
+          $('#busy-txt').textContent = 'Diapositives ' + (i + 1) + '/' + avec.length + ' : ' + p.court + '…';
+          return window.EXPORTS.diapos(state.rapports, Object.assign({}, f, { pilier: p.id, blob: true }), charger).then(function (x) { fichiers.push(x); });
+        });
+      }, Promise.resolve());
+    }).then(function () {
+      var z = new window.JSZip(); fichiers.forEach(function (x) { z.file(x.nom, x.blob); });
+      return z.generateAsync({ type: 'blob' });
+    }).then(function (b) {
+      var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'Rapports_piliers_HU_' + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.zip';
+      document.body.append(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      var sans = D.PILIERS.length - avec.length;
+      toast(avec.length + ' présentation' + (avec.length > 1 ? 's' : '') + ' (une par pilier) dans le fichier zip' + (sans ? ' · ' + sans + ' pilier' + (sans > 1 ? 's' : '') + ' sans rapport' : '') + '.', 6000);
+    }).catch(function (e) { toast('Diapositives impossibles : ' + e.message, 6000); })
+      .then(function () { busy(false); });
+  }
+  function pptxRapport() {
+    var r = state.courant;
+    if (!r || A.estDepart(r)) return;
+    if (state.sale) { toast('Enregistrez d’abord vos modifications (« Enregistrer » ou « Valider et envoyer »), puis téléchargez.', 6000); return; }
+    var f = { debut: r.date, fin: r.date, zones: [r.zone], zone: r.zone, pilier: r.pilier, periode: '0', cumul: false, unRapport: true };
+    busy(true, 'Préparation du PowerPoint…');
+    chargerScript('pptxgen.bundle.js', function () { return window.PptxGenJS; }).then(function () {
+      // Rapports précédents (même pilier, zone et unité) : courbe d'évolution sur 14 jours et cumul
+      var sig = function (x) { return A.cleRapport(Object.assign({}, x, { date: '' })); }, d0 = A.decaler(r.date, -13);
+      // + tous les rapports antérieurs et les valeurs de départ de la zone pour le cumul
+      var hist = A.dedoublonner(state.rapports).filter(function (x) { return x.pilier === r.pilier && x.zone === r.zone && (A.estDepart(x) || (x.date < r.date && sig(x) === sig(r))); });
+      return window.EXPORTS.diapos([r].concat(hist), f, function (id) { return blobPhoto(id).then(function (b) { return b ? enDataURL(b) : null; }); });
+    }).then(function () { toast('PowerPoint du rapport enregistré dans les téléchargements.'); })
+      .catch(function (e) { toast('PowerPoint impossible : ' + e.message, 6000); })
       .then(function () { busy(false); });
   }
   function chargerScript(src, pret) {
@@ -714,7 +896,7 @@
 
   /* ---------- Vues, réglages ---------- */
   function montrer(v) {
-    state.vue = v; lsSet('piliers-vue', v);
+    state.vue = v; lsSet('piliers-vue', v); document.body.classList.toggle('ctrl-on', v === 'saisir' && !$('#f-ctrl-alerte').hidden);
     ['saisir', 'liste', 'qualite', 'tableau'].forEach(function (x) { $('#v-' + x).hidden = x !== v; });
     $$('.tabs button').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.v === v ? 'true' : 'false'); });
     window.scrollTo(0, 0); rafraichir();
@@ -810,9 +992,14 @@
     remplir($('#t-pilier'), listePiliers, '', 'Tous les piliers');
     $('#f-date').value = A.jour(); $('#t-date').value = A.jour();
     ['#f-pilier', '#f-date', '#f-zone', '#f-depart'].forEach(function (s) { $(s).addEventListener('change', function () { chargerSelection(); }); });
+    $('#f-par-aire').addEventListener('change', basculerAire);
+    $('#f-sections').addEventListener('change', function () { setTimeout(signalerNouvelles, 0); });
+    $('#f-ctrl-alerte').addEventListener('click', function () { $('#f-ctrl-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    $('#f-aire').addEventListener('change', function () { changerAire($('#f-aire').value); });
     $('#btn-brouillon').addEventListener('click', function () { enregistrer(false); });
     $('#btn-envoyer').addEventListener('click', function () { enregistrer(true); });
     $('#btn-supprimer').addEventListener('click', supprimer);
+    $('#btn-pptx-rapport').addEventListener('click', pptxRapport);
     $('#btn-nouveau').addEventListener('click', function () {
       if (state.sale && !confirm('Abandonner les valeurs non enregistrées ?')) return;
       $('#f-date').value = A.jour(); $('#f-depart').checked = false; state.sale = false; chargerSelection(true); window.scrollTo(0, 0);

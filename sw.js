@@ -1,8 +1,8 @@
 /* Service worker de « Rapports des piliers MVE » : l'application s'ouvre et se remplit sans Internet.
    Réseau d'abord pour les fichiers de l'application (nouvelle version prise dès qu'il y a Internet),
    cache seulement hors ligne. Les envois vers Google Sheets ne passent pas par ici. */
-var VERSION = 'piliers-mve-v16'; // v2 : en-tête officiel SGI MVE 17
-var SHELL = ['./', 'index.html', 'app-piliers.js', 'piliers-def.js', 'agregats.js', 'qualite-piliers.js', 'exports.js', 'pptxgen.bundle.js', 'xlsx.mini.min.js',
+var VERSION = 'piliers-mve-v23'; // v2 : en-tête officiel SGI MVE 17
+var SHELL = ['./', 'index.html', 'app-piliers.js', 'piliers-def.js', 'agregats.js', 'qualite-piliers.js', 'exports.js', 'diapo-merci.jpg', 'jszip.min.js', 'pptxgen.bundle.js', 'xlsx.mini.min.js',
   'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'maskable-512.png', 'apple-touch-icon.png', 'embleme.png', 'entete-officiel.png', 'embleme-petit.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(VERSION).then(function (c) {

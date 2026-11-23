@@ -130,6 +130,14 @@
   .ph { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); }
   .ph img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--line); }
   .ph input { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 8px; background: var(--panel); font-size: 13px; min-height: 40px; }
+  .aires-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .aires-chips button { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 4px 10px; font-size: 12.5px; cursor: pointer; }
+  .aires-chips button.ok { border-color: var(--ok); color: var(--ok); }
+  .aires-chips button.cur { background: var(--ink); color: #fff; border-color: var(--ink); }
+  input.num.somme { background: var(--ok-bg); font-weight: 600; }
+  #f-sections.mode-aire input.num.zone-seule { opacity: .35; }
+  #f-sections.mode-aire textarea, #f-sections.mode-aire .stack, #f-sections.mode-aire .phs, #f-sections.mode-aire .sec .btn { opacity: .4; pointer-events: none; }
+  .ph select.act { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 8px; background: var(--panel); font-size: 13px; min-height: 40px; color: var(--ink, inherit); }
   .ph .del { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; border-radius: 16px; border: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 18px; cursor: pointer; }
   .galerie { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
   .vign { margin: 0; border-radius: 10px; overflow: hidden; background: var(--bg); border: 1px solid var(--line); }
@@ -141,6 +149,12 @@
   .wa { background: #25d366; color: #fff; border: 0; border-radius: 16px; padding: 6px 12px; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
   .wa.fait { background: var(--ok-bg); color: var(--ok); }
   /* Qualité */
+  .ctrl-alerte { position: sticky; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); z-index: 15; width: 100%; text-align: left; border: 0; border-radius: 10px; padding: 10px 14px;
+    font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.18); background: var(--warn-bg); color: var(--fg); border-left: 5px solid var(--warn); }
+  body.ctrl-on .toast { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+  .ctrl-alerte.erreur { background: var(--bad-bg); border-left-color: var(--bad); }
+  .ctrl-alerte small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  ul.ctrl li.ecart { background: var(--warn-bg); border-left: 4px solid var(--warn); } ul.ctrl li.attente { color: var(--muted); }
   ul.ctrl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   ul.ctrl li { font-size: 13.5px; line-height: 1.4; padding: 7px 10px; border-radius: 8px; background: var(--bg); }
   ul.ctrl li.erreur { background: var(--bad-bg); } ul.ctrl li.alerte { background: var(--warn-bg); } ul.ctrl li.ok { color: var(--ok); }
@@ -213,13 +227,23 @@
       <p class="note" id="f-depart-aide" hidden>Saisissez une fois, pour ce pilier et cette zone, les cumuls arrêtés à la date indiquée (incluse), tirés de vos derniers rapports PowerPoint ou Excel. Dans le tableau de bord, « Depuis le début » ajoute ces valeurs aux rapports quotidiens des jours suivants.</p>
       <p class="note" id="f-etat"></p>
     </div>
+    <div class="card" id="f-aires-card" hidden>
+      <label class="chk" style="margin:0"><input type="checkbox" id="f-par-aire"> Renseigner aussi par aire de santé (facultatif)</label>
+      <div id="f-aires-zone" hidden>
+        <div class="field" style="margin-top:10px"><label for="f-aire">Valeurs affichées</label><select id="f-aire"></select></div>
+        <p class="note" id="f-aire-aide"></p>
+        <div class="aires-chips" id="f-aires-chips"></div>
+      </div>
+    </div>
     <div id="f-sections" class="view" style="gap:10px"></div>
+    <button type="button" class="ctrl-alerte" id="f-ctrl-alerte" hidden></button>
     <div class="card" id="f-calc-card">
       <h2>Indicateurs calculés</h2>
       <div class="calc" id="f-calc"></div>
     </div>
     <div class="card" id="f-ctrl-card">
       <h2>Contrôles de cohérence</h2>
+      <p class="note" style="margin:0 0 8px">Cohérence de votre rapport, continuité avec la veille et concordance avec les rapports des autres piliers de la même zone et du même jour (selon la dernière synchronisation).</p>
       <div id="f-reports" hidden></div>
       <ul class="ctrl" id="f-ctrl"></ul>
     </div>
@@ -231,6 +255,9 @@
     <div class="btns">
       <button class="btn ghost small" id="btn-nouveau" type="button">Nouveau rapport</button>
       <button class="btn ghost small" id="btn-supprimer" type="button" hidden>Supprimer ce rapport</button>
+    </div>
+    <div class="btns" id="f-pptx-zone" hidden>
+      <button class="btn small" id="btn-pptx-rapport" type="button">Télécharger ce rapport en PowerPoint</button>
     </div>
   </section>
 
@@ -304,7 +331,7 @@
       <p class="note" id="t-info"></p>
       <div class="btns" style="margin-top:10px">
         <button class="btn small" id="btn-xlsx" type="button">Exporter en Excel</button>
-        <button class="btn small" id="btn-pptx" type="button">Diapositives du jour</button>
+        <button class="btn small" id="btn-pptx" type="button">Diapositives par pilier (zip)</button>
       </div>
     </div>
     <div class="card">
