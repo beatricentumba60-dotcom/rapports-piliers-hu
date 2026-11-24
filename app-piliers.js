@@ -174,7 +174,8 @@
   /* ---------- Formulaire ---------- */
   function pilierCourant() { return D.pilier($('#f-pilier').value) || D.PILIERS[0]; }
   function enteteCourante(p) {
-    var e = {}; (p.entete || []).forEach(function (c) { e[c[0]] = ($('#e-' + c[0]) || {}).value || ''; }); return e;
+    var e = {}; if ($('#f-zone').value === D.PROVINCE) return e;
+    (p.entete || []).forEach(function (c) { e[c[0]] = ($('#e-' + c[0]) || {}).value || ''; }); return e;
   }
   function trouverRapport(p, date, zone, entete) {
     var cle = A.cleRapport({ pilier: p.id, date: date, zone: zone, donnees: { entete: entete, depart: modeDepart() } });
@@ -402,13 +403,19 @@
     if (!force && state.sale && !confirm('Des valeurs saisies ne sont pas enregistrées. Les abandonner ?')) {
       restaurerSelection(); return;
     }
+    var PT = state.reglages.portee;
+    if (PT && PT.pilier) $('#f-pilier').value = PT.pilier;
+    $('#f-pilier').disabled = !!(PT && PT.pilier);
     var p = pilierCourant();
     if (state._pilierAff !== p.id) { construireEntete(p, state.courant && state.courant.pilier === p.id ? state.courant.donnees.entete : null); state._pilierAff = p.id; }
     var zones = D.zonesPour(p), zv = $('#f-zone').value;
     remplir($('#f-zone'), zones, zones.indexOf(zv) >= 0 ? zv : (zones.indexOf(state.reglages.zone) >= 0 ? state.reglages.zone : zones[0]));
+    if (PT && PT.zone) $('#f-zone').value = PT.zone;
+    $('#f-zone').disabled = !!(PT && PT.zone);
     $('#lab-fzone').textContent = p.zoneLib || 'Zone de santé';
     var dep = modeDepart();
-    $('#f-entete').hidden = dep || !(p.entete || []).length; $('#f-depart-aide').hidden = !dep;
+    // Rapport provincial : pas d'unité (CTE, laboratoire) à préciser
+    $('#f-entete').hidden = dep || !(p.entete || []).length || $('#f-zone').value === D.PROVINCE; $('#f-depart-aide').hidden = !dep;
     $('#l-date').textContent = dep ? 'Cumul arrêté au (inclus)' : 'Date du rapport';
     $('#f-ctrl-card').hidden = dep;
     var rap = trouverRapport(p, $('#f-date').value, $('#f-zone').value, enteteCourante(p));
@@ -507,7 +514,7 @@
       $('#f-ctrl-card').scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     if ($$('#f-sections input.num.err').length) { toast('Corrigez les valeurs en rouge (nombres positifs uniquement).'); $('#f-sections input.num.err').focus(); return; }
-    if (!d.depart && (p.entete || []).some(function (c) { return !d.entete[c[0]]; })) { toast('Indiquez : ' + p.entete.map(function (c) { return c[1]; }).join(', ') + '.'); return; }
+    if (!d.depart && $('#f-zone').value !== D.PROVINCE && (p.entete || []).some(function (c) { return !d.entete[c[0]]; })) { toast('Indiquez : ' + p.entete.map(function (c) { return c[1]; }).join(', ') + '.'); return; }
     if (!Object.keys(d.valeurs).length && !Object.keys(d.textes).length && !Object.keys(d.listes).length && !(d.photos || []).length) { toast('Le rapport est vide.'); return; }
     var ex = state.courant, r = {
       id: ex ? ex.id : uid(), pilier: p.id, date: $('#f-date').value, zone: $('#f-zone').value,
@@ -547,14 +554,15 @@
     return fetch(R.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ cle: R.cle }, corps)), redirect: 'follow' })
       .then(function (res) { if (!res.ok) throw new Error('Le script Google a répondu ' + res.status + '.'); return res.json(); })
       .then(function (j) {
-        if (!j || !j.ok) throw new Error(j && j.erreur === 'cle' ? 'Clé d’équipe refusée.' : 'Erreur du script Google : ' + ((j && j.erreur) || 'réponse inattendue') + '.');
+        if (!j || !j.ok) throw new Error(j && j.erreur === 'cle' ? 'Code d’accès refusé (vérifiez-le ou demandez-en un nouveau à la coordination).'
+          : j && j.erreur === 'hors_portee' ? 'Ce code d’accès ne couvre pas ce pilier ou cette zone.' : 'Erreur du script Google : ' + ((j && j.erreur) || 'réponse inattendue') + '.');
         return j;
       });
   }
   function nettoyer(r) { return { id: r.id, pilier: r.pilier, date: r.date, zone: r.zone, auteur: r.auteur, maj: r.maj, donnees: r.donnees }; }
   function synchroniser(silencieux, tout) {
     var R = state.reglages;
-    if (!R.url || !R.cle) { if (!silencieux) { toast('Indiquez d’abord l’adresse du script et la clé d’équipe.'); ouvrirReglages(); } majEtat(); return Promise.resolve(); }
+    if (!R.url || !R.cle) { if (!silencieux) { toast('Indiquez d’abord l’adresse du script et votre code d’accès.'); ouvrirReglages(); } majEtat(); return Promise.resolve(); }
     if (state.sync) return Promise.resolve();
     state.sync = true; $('#btn-sync').classList.add('spin'); majEtat();
     var attente = state.rapports.filter(function (r) { return r._etat === 'a_envoyer'; }), envoyes = 0, recus = 0;
@@ -562,9 +570,12 @@
     var chaine = lots.reduce(function (pr, lot) {
       return pr.then(function () {
         return appel({ action: 'envoyer', rapports: lot.map(nettoyer) }).then(function (j) {
-          var ok = {}; (j.ids || []).forEach(function (id) { ok[id] = 1; });
+          var ok = {}, ko = {}; (j.ids || []).forEach(function (id) { ok[id] = 1; }); (j.refuses || []).forEach(function (id) { ko[id] = 1; });
           var maj = lot.filter(function (r) { return ok[r.id]; }).map(function (r) { return Object.assign({}, r, { _etat: 'envoye', _envoyeUneFois: true }); });
-          envoyes += maj.length; maj.forEach(remplacer); return S.putMany(maj);
+          // Rapports hors du pilier ou de la zone du code d'accès : gardés en brouillon sur le téléphone
+          var rf = lot.filter(function (r) { return ko[r.id]; }).map(function (r) { return Object.assign({}, r, { _etat: 'brouillon', _refuse: true }); });
+          if (rf.length) setTimeout(function () { toast(rf.length + ' rapport' + (rf.length > 1 ? 's' : '') + ' refusé' + (rf.length > 1 ? 's' : '') + ' : hors du pilier ou de la zone de votre code d’accès. ' + (rf.length > 1 ? 'Ils restent' : 'Il reste') + ' en brouillon sur ce téléphone.', 8000); }, 1500);
+          envoyes += maj.length; maj.concat(rf).forEach(remplacer); return S.putMany(maj.concat(rf));
         });
       });
     }, Promise.resolve());
@@ -628,6 +639,9 @@
     }));
   }
   function ouvrirRapport(r) {
+    var PT = state.reglages.portee;
+    if (lectureSeule()) { toast('La clé de la coordination permet de consulter les rapports, pas de les saisir ni de les modifier. Chaque rapport se saisit avec le code d’accès de son pilier et de sa zone.', 7000); return; }
+    if (PT && PT.pilier && (r.pilier !== PT.pilier || r.zone !== PT.zone)) { toast('Ce rapport relève d’un autre pilier ou d’une autre zone : votre code d’accès ne permet pas de le modifier. Consultez-le dans le tableau de bord.', 6000); return; }
     if (state.sale && !confirm('Des valeurs saisies ne sont pas enregistrées. Les abandonner ?')) return;
     $('#f-pilier').value = r.pilier; $('#f-date').value = r.date; $('#f-depart').checked = A.estDepart(r);
     state._pilierAff = null; state.courant = r; state.sale = false;
@@ -895,7 +909,15 @@
   }
 
   /* ---------- Vues, réglages ---------- */
+  function lectureSeule() { var PT = state.reglages.portee; return !!(PT && PT.lecture); }
+  function appliquerLecture() {
+    var ls = lectureSeule();
+    document.body.classList.toggle('lecture-seule', ls);
+    var b = $('.tabs button[data-v="saisir"]'); if (b) b.hidden = ls;
+    if (ls && state.vue === 'saisir') montrer('tableau');
+  }
   function montrer(v) {
+    if (v === 'saisir' && lectureSeule()) { v = 'tableau'; }
     state.vue = v; lsSet('piliers-vue', v); document.body.classList.toggle('ctrl-on', v === 'saisir' && !$('#f-ctrl-alerte').hidden);
     ['saisir', 'liste', 'qualite', 'tableau'].forEach(function (x) { $('#v-' + x).hidden = x !== v; });
     $$('.tabs button').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.v === v ? 'true' : 'false'); });
@@ -968,19 +990,39 @@
     var R = state.reglages;
     $('#r-auteur').value = R.auteur || ''; $('#r-url').value = R.url || ''; $('#r-cle').value = R.cle || ''; $('#r-clecoord').value = R.cleCoord || '';
     remplir($('#r-pilier'), listePiliers, R.pilier || '', '—'); remplir($('#r-zone'), toutesZones, R.zone || '', '—');
+    afficherPortee(R.portee);
     $('#r-msg').textContent = '';
     $('#sheet-bg').hidden = false; $('#sheet-reglages').hidden = false;
+  }
+  function afficherPortee(PT) {
+    var lim = !!(PT && PT.pilier);
+    $('#r-pilier').disabled = $('#r-zone').disabled = lim;
+    if (lim) { $('#r-pilier').value = PT.pilier; $('#r-zone').value = PT.zone; }
+    $('#r-portee').textContent = lim ? 'Ce code d’accès vous permet d’envoyer les rapports du pilier ' + D.pilier(PT.pilier).nom + ' pour : ' + PT.zone + '.'
+      : PT && PT.lecture ? 'Clé de la coordination : consultation de tous les piliers et de toutes les zones (tableau de bord, qualité, exports). Pas de saisie : chaque rapport se saisit avec le code d’accès de son pilier et de sa zone.'
+      : PT && PT.tout ? 'Clé de la coordination : accès à tous les piliers et à toutes les zones.' : '';
   }
   function fermer() { $('#sheet-bg').hidden = true; $('#sheet-reglages').hidden = true; }
   function sauverReglages() {
     var R = { auteur: $('#r-auteur').value.trim(), url: $('#r-url').value.trim(), cle: $('#r-cle').value, cleCoord: $('#r-clecoord').value, pilier: $('#r-pilier').value, zone: $('#r-zone').value };
     if (R.url && !/^https:\/\/script\.google(usercontent)?\.com\//.test(R.url)) { $('#r-msg').textContent = 'L’adresse doit commencer par https://script.google.com/'; return; }
     state.reglages = R; S.set('reglages', R);
-    if (!R.url || !R.cle) { $('#r-msg').textContent = 'Réglages enregistrés. Sans adresse ni clé, les rapports restent sur ce téléphone.'; return; }
+    if (!R.url || !R.cle) { $('#r-msg').textContent = 'Réglages enregistrés. Sans adresse ni code d’accès, les rapports restent sur ce téléphone.'; return; }
     $('#r-msg').textContent = 'Test de la connexion…';
-    appel({ action: 'lire', depuis: '9999' }).then(function () {
+    // Le code d'accès détermine le pilier et la zone (la clé de la coordination donne accès à tout)
+    appel({ action: 'qui' }).catch(function (e) {
+      if (/action inconnue/.test(e.message)) return { portee: null }; // script Google pas encore mis à jour : pas de restriction
+      throw e;
+    }).then(function (j) {
+      var PT = j.portee || null;
+      R.portee = PT; if (PT && PT.pilier) { R.pilier = PT.pilier; R.zone = PT.zone; }
+      state.reglages = R; S.set('reglages', R); afficherPortee(PT); appliquerLecture();
+      if (PT && PT.pilier) { $('#f-pilier').value = PT.pilier; chargerSelection(true); } else { $('#f-pilier').disabled = $('#f-zone').disabled = false; }
+      return appel({ action: 'lire', depuis: '9999' });
+    }).then(function () {
       $('#r-msg').textContent = 'Connexion réussie.'; state.erreur = null; synchroniser(false);
-      if (R.cleCoord) chargerAnnuaire(true).then(function (a) { $('#r-msg').textContent = a ? 'Connexion réussie. Annuaire des points focaux : ' + a.focaux.length + ' contact(s).' : 'Connexion réussie, mais la clé coordination est refusée.'; });
+      if (R.cleCoord && R.portee && R.portee.pilier) { $('#r-msg').textContent = 'Connexion réussie. (La clé coordination ne s’utilise qu’avec la clé de la coordination.)'; }
+      else if (R.cleCoord) chargerAnnuaire(true).then(function (a) { $('#r-msg').textContent = a ? 'Connexion réussie. Annuaire des points focaux : ' + a.focaux.length + ' contact(s).' : 'Connexion réussie, mais la clé coordination est refusée.'; });
       else { state.annuaire = null; S.set('annuaire', null); }
     }).catch(function (e) { $('#r-msg').textContent = e.message; });
   }
@@ -1031,7 +1073,7 @@
       state.reglages = res[0] || {}; state.rapports = res[1] || []; state.derniere = res[2] || null;
       if (state.reglages.pilier) $('#f-pilier').value = state.reglages.pilier;
       chargerSelection(true); majBadge();
-      montrer(lsGet('piliers-vue') || 'saisir');
+      appliquerLecture(); montrer(lsGet('piliers-vue') || 'saisir');
       if (!state.reglages.auteur) ouvrirReglages(); else synchroniser(true);
     }).catch(function () { toast('Stockage du téléphone indisponible : utilisez Chrome hors navigation privée.', 8000); });
     if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(function () { /* hors ligne indisponible */ });

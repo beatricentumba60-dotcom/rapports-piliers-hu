@@ -107,6 +107,13 @@
     csse: [
       { id: 'sent', grav: 'erreur', lib: 'ESS sentinelles fonctionnels ≤ ESS sentinelles suivis', f: function (v) { var a = v('sent_fonc'), b = v('sent_suivis'); return [le(a, b), a, b]; } }
     ],
+    secu: [
+      { id: 'inc', grav: 'erreur', lib: 'Agressions + véhicules + sites + menaces ≤ incidents sécuritaires',
+        f: function (v) { var a = S(v, ['inc_pers', 'inc_veh', 'inc_site', 'inc_menace']), b = v('inc_tot'); return [a ? le(a, b || 0) : null, a, b]; } },
+      { id: 'esc', grav: 'erreur', lib: 'Escortes réalisées ≤ escortes demandées', f: function (v) { var a = v('esc_real'), b = v('esc_dem'); return [le(a, b), a, b]; } },
+      { id: 'as', grav: 'alerte', lib: 'Aires de santé inaccessibles ≤ aires de la zone',
+        f: function (v, r) { var a = v('as_inacc'), n = r && D.aires(r.zone).length; return [a == null || !n ? null : le(a, n), a, n || null]; } }
+    ],
     log: [
       { id: 'carb', grav: 'erreur', lib: 'Sorties de carburant ≤ solde antérieur + entrées', f: function (v) { var a = v('carb_out'), b = S(v, ['carb_ant', 'carb_in']); return [a ? le(a, b || 0) : null, a, b]; } }
     ]
@@ -166,7 +173,7 @@
     var p = D.pilier(r.pilier); if (!p || A.estDepart(r)) return [];
     var V = valeursRapport(p, r), v = lecteur(V), out = [];
     (INTERNES[p.id] || []).forEach(function (R) {
-      var x; try { x = R.f(v); } catch (e) { x = [null]; }
+      var x; try { x = R.f(v, r); } catch (e) { x = [null]; }
       if (x[0] == null) return;
       out.push({ regle: R, ok: x[0], a: x[1], b: x[2] });
     });

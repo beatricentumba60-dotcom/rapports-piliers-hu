@@ -126,11 +126,12 @@
       });
       feuille('Qualité', qa, [24, 14, 70, 26, 16, 22, 10, 10, 26, 22]);
     }
-    X.writeFile(wb, (f.pilier ? 'Rapport_' + D.pilier(f.pilier).court.replace(/[\s\/]+/g, '_') + '_HU_' : 'Rapports_piliers_HU_') + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.xlsx');
+    X.writeFile(wb, (f.pilier ? 'Rapport_' + sansAccents(D.pilier(f.pilier).court).replace(/[\s\/]+/g, '_') + '_HU_' : 'Rapports_piliers_HU_') + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.xlsx');
   }
 
   /* ---------- PowerPoint ---------- */
   var W = 13.333, H = 7.5, ENCRE = '0F3D3E', GRIS = '5D6B78';
+  function sansAccents(t) { return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
   function morceaux(arr, n) { var o = []; for (var i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o.length ? o : [[]]; }
   function f1(v, pct) { if (v == null) return '–'; return pct ? (Math.round(v * 1000) / 10).toString().replace('.', ',') + ' %' : (Math.round(v * 10) / 10).toLocaleString('fr-FR'); }
   // Emblème (embleme.png) en data URL pour l'intégrer à la présentation
@@ -340,7 +341,8 @@
 
       // 1. Points saillants
       var s1 = nouvelle(p.court + ' – points saillants', coul, MZ ? c.ordre.length + ' zones ayant rapporté' : '');
-      puces(s1, textesEnPuces(A.textes(R, 'saillants'), multi).map(function (x) { return avecZone ? x : ['', x[1]]; }), 1.5, H - 2.2);
+      var ps = []; A.textes(R, 'saillants').forEach(function (t) { A.activites(t.t).forEach(function (l) { ps.push([avecZone ? t.zone + (multi ? ' (' + A.fr(t.date) + ')' : '') + ' : ' : '', l]); }); });
+      puces(s1, ps, 1.5, H - 2.2);
 
       // 2. Activités réalisées (avec leurs photos)
       activitesRealisees(p, coul, R, avecZone);
@@ -392,7 +394,7 @@
         if (sec.champs) {
           var ch = sec.champs.filter(function (x) { return c.ordre.some(function (z) { return c.zones[z].valeurs[x[0]] != null; }); });
           if (!ch.length) return;
-          var lib = function (x) { return court(x[1], 42) + (x[2] === 'stock' ? ' *' : ''); };
+          var lib = function (x) { return court(x[1], 70) + (x[2] === 'stock' ? ' *' : ''); };
           if (MZ) morceaux(ch, 4).forEach(function (part, i, all) {
             var s = nouvelle(p.court + ' – ' + sec.titre + (all.length > 1 ? ' (' + (i + 1) + '/' + all.length + ')' : ''), coul, 'Par zone de santé');
             multiples(s, part.map(function (x) { return { titre: lib(x), labels: c.ordre.map(function (z) { return z.replace('Coordination provinciale', 'Prov.').replace('Boma Mangbetu', 'Boma M.'); }), values: c.ordre.map(function (z) { return z0(c.zones[z].valeurs[x[0]]); }) }; }), coul, { horiz: c.ordre.length > 5 });
@@ -406,14 +408,14 @@
           var lg = g.lignes.filter(function (l) { return g.colonnes.some(function (k) { return V[sec.id + '.' + l[0] + '.' + k[0]] != null; }); });
           if (!lg.length) return;
           var s2 = nouvelle(p.court + ' – ' + sec.titre, coul, [MZ ? 'Total des zones' : '', lg.some(function (l) { return l[2] === 'stock'; }) ? '* situation en fin de journée' : ''].filter(Boolean).join(' · '));
-          barres(s2, g.colonnes.map(function (k) { return { name: k[1], labels: lg.map(function (l) { return court(l[1], 40) + (l[2] === 'stock' ? ' *' : ''); }), values: lg.map(function (l) { return z0(V[sec.id + '.' + l[0] + '.' + k[0]]); }) }; }), coul, { horiz: lg.length > 5 });
+          barres(s2, g.colonnes.map(function (k) { return { name: k[1], labels: lg.map(function (l) { return court(l[1], 60) + (l[2] === 'stock' ? ' *' : ''); }), values: lg.map(function (l) { return z0(V[sec.id + '.' + l[0] + '.' + k[0]]); }) }; }), coul, { horiz: lg.length > 5 });
         } else if (sec.liste) {
           var L = A.lignesListe(R, sec.id); if (!L.length) return;
           var lc2 = sec.liste.colonnes;
           var s3 = nouvelle(p.court + ' – ' + sec.titre, coul);
           tableau(s3, (MZ ? ['Zone'] : []).concat(multi ? ['Date'] : [], lc2.map(function (k) { return k[1]; })), L.map(function (x) {
             return (MZ ? [x.zone] : []).concat(multi ? [A.fr(x.date)] : [], lc2.map(function (k) { return k[2] === 'n' ? f1(A.num(x.l[k[0]])) : (x.l[k[0]] || ''); }));
-          }), { couleur: coul, wl: MZ ? 1.6 : 3, fs: lc2.length > 8 ? 9 : 11, gauche: lc2.every(function (k) { return k[2] !== 'n'; }) });
+          }), { couleur: coul, wl: MZ ? 1.6 : 3, colW: !MZ && !multi && lc2.length === 2 ? [8.6, 3.73] : undefined, fs: lc2.length > 8 ? 9 : 11, gauche: lc2.every(function (k) { return k[2] !== 'n'; }) });
         } else if (sec.textes) {
           var it = [];
           sec.textes.forEach(function (t) { A.textes(R, t[0]).forEach(function (x) { it.push([(avecZone ? x.zone : '') + (sec.textes.length > 1 ? (avecZone ? ' – ' : '') + t[1] : '') + (avecZone || sec.textes.length > 1 ? ' : ' : ''), String(x.t).replace(/\s*\n\s*/g, ' ; ')]); }); });
@@ -465,9 +467,9 @@
     }
     // Dernière diapositive : remerciements avec l'en-tête officiel
     if (merci) { var sm = P.addSlide(); sm.background = { color: 'FFFFFF' }; sm.addImage({ data: merci, x: 0, y: 0, w: W, h: W * 708 / 1263 }); }
-    var nomF = (f.pilier ? 'Rapport_' + D.pilier(f.pilier).court.replace(/[\s\/]+/g, '_') + '_HU_' : 'Rapports_piliers_HU_') + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.pptx';
+    var nomF = (f.pilier ? 'Rapport_' + sansAccents(D.pilier(f.pilier).court).replace(/[\s\/]+/g, '_') + '_HU_' : 'Rapports_piliers_HU_') + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.pptx';
     if (f.blob) return P.write({ outputType: 'blob' }).then(function (b) { return { nom: nomF, blob: b }; });
-    return P.writeFile({ fileName: (f.pilier ? 'Rapport_' + D.pilier(f.pilier).court.replace(/[\s\/]+/g, '_') + '_HU_' : 'Rapports_piliers_HU_') + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.pptx' });
+    return P.writeFile({ fileName: (f.pilier ? 'Rapport_' + sansAccents(D.pilier(f.pilier).court).replace(/[\s\/]+/g, '_') + '_HU_' : 'Rapports_piliers_HU_') + f.fin + (f.zone ? '_' + f.zone.replace(/\s+/g, '_') : '') + '.pptx' });
   }
 
   root.EXPORTS = { excel: excel, diapos: diapos };

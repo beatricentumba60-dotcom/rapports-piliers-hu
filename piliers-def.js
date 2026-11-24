@@ -234,6 +234,39 @@
         { id: 'carb_solde', lib: 'Solde de carburant (L)', cle: true, f: function (v) {
           var a = v('carb_ant'), e = v('carb_in'), o = v('carb_out'); return a == null && e == null && o == null ? null : s(a, e) - (o || 0); } }
       ]
+    },
+    {
+      // Canevas « Sécurité et Relations Publiques » (présentation du 19/08/2026)
+      id: 'secu', nom: 'Sécurité et relations publiques', court: 'Sécurité', couleur: '#2f3e8f', niveau: 'les deux',
+      sections: [
+        { id: 'inc', titre: 'Incidents sécuritaires', champs: [
+          ['inc_tot', 'Incidents sécuritaires contre la riposte', 'sum', true],
+          ['inc_pers', 'dont agressions du personnel (prestataires, volontaires)', 'sum', true],
+          ['inc_veh', 'dont véhicules ou ambulances attaqués, vandalisés ou incendiés', 'sum', true],
+          ['inc_site', 'dont attaques de sites (CTE, laboratoire, stockage, PoE/PoC)'],
+          ['inc_menace', 'dont menaces et réticences violentes'],
+          ['blesses', 'Membres du personnel de la riposte blessés', 'sum', true],
+          ['act_bloq', 'Activités de riposte bloquées ou suspendues pour raison de sécurité']] },
+        { id: 'acces', titre: 'Situation actuelle de la sécurité', champs: [
+          ['zs_tension', 'Zones de santé en situation tendue ou à problèmes', 'stock', true],
+          ['as_inacc', 'Aires de santé inaccessibles pour raison de sécurité', 'stock', true]] },
+        { id: 'sit', titre: 'Zones à situation stable et zones à problèmes', textes: [
+          ['sit_stable', 'Zones / aires de santé à situation stable'], ['sit_pb', 'Zones / aires de santé à problèmes']] },
+        { id: 'mop', titre: 'Maintien et rétablissement de l’ordre public', champs: [
+          ['mop_int', 'Interventions de maintien ou de rétablissement de l’ordre public (MOP / ROP)', 'sum', true],
+          ['esc_dem', 'Escortes demandées (EDS, transport de cas ou de corps, intrants)'],
+          ['esc_real', 'Escortes réalisées', 'sum', true],
+          ['eq_mixtes', 'Équipes mixtes FARDC – PNC déployées', 'stock', true],
+          ['sites_secu', 'Sites sécurisés (CTE, laboratoire, stockage, PoE/PoC)', 'stock']] },
+        { id: 'actmop', titre: 'Activités de maintien et de rétablissement de l’ordre public', liste: { colonnes: [
+          ['activite', 'Activité MOP / ROP', 'texte'], ['souscoord', 'Sous-coordination', 'texte'],
+          ['equipes', 'Équipes ayant bénéficié de l’action', 'texte'], ['ind', 'Indicateur', 'texte']] } },
+        { id: 'reco', titre: 'Recommandations', liste: { colonnes: [
+          ['reco', 'Recommandation', 'texte'], ['resp', 'Responsable (structure)', 'texte']] } }
+      ],
+      calculs: [
+        { id: 'p_esc', lib: '% escortes réalisées', pct: true, cle: true, f: function (v) { return r(v('esc_real'), v('esc_dem')); } }
+      ]
     }
   ];
   function somGrille(v, sec, lignes, col) {
@@ -288,7 +321,8 @@
   function sections(p) { return COMMUN_DEBUT.concat(p.sections, COMMUN_FIN); }
   function zonesPour(p) {
     if (p.niveau === 'les deux') return [PROVINCE].concat(ZONES);
-    if (p.id === 'labo') return ZONES.concat([HORS]);
+    // Laboratoire : zones d'origine des échantillons, rapport provincial du pilier, et Hors province (échantillons venus d'ailleurs)
+    if (p.id === 'labo') return ZONES.concat([PROVINCE, HORS]);
     return ZONES.concat([PROVINCE]);
   }
 
