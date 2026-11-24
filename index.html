@@ -119,6 +119,13 @@
   .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; background: var(--panel); border-radius: 16px 16px 0 0; max-height: 90vh; overflow-y: auto; max-width: 640px; margin: 0 auto;
     padding: 8px max(18px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px)); box-shadow: 0 -8px 30px rgba(0,0,0,.2); }
   .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 4px auto 12px; }
+  .fiche-sec { border-top: 1px solid var(--line); padding: 10px 0 4px; }
+  .fiche-sec h4 { margin: 0 0 6px; font-size: 14.5px; }
+  .fiche-sec dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; font-size: 13.5px; }
+  .fiche-sec dt { color: var(--muted); } .fiche-sec dd { margin: 0; font-weight: 600; text-align: right; }
+  .fiche-sec p { margin: 0 0 6px; font-size: 13.5px; white-space: pre-line; }
+  .fiche-sec table { width: 100%; border-collapse: collapse; font-size: 12.5px; } .fiche-sec th, .fiche-sec td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+  .fiche-sec td.n { text-align: right; } .fiche-sec .tw { overflow-x: auto; }
   .sheet h3 { margin: 0 0 12px; font-size: 17px; } .sheet .field { margin-bottom: 12px; }
   .stack { display: flex; flex-direction: column; gap: 8px; }
   .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 50; background: #1b2731; color: #fff;
@@ -356,7 +363,7 @@
   <button role="tab" data-v="saisir" aria-selected="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M14 4h-8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Saisir</button>
   <button role="tab" data-v="liste" aria-selected="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Mes rapports<span class="dot" id="dot-attente" hidden></span></button>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span id="lib-liste">Mes rapports</span><span class="dot" id="dot-attente" hidden></span></button>
   <button role="tab" data-v="qualite" aria-selected="false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Qualité<span class="dot" id="dot-qualite" hidden></span></button>
   <button role="tab" data-v="tableau" aria-selected="false">
@@ -364,6 +371,16 @@
 </nav>
 
 <div class="sheet-bg" id="sheet-bg" hidden></div>
+<div class="sheet" id="sheet-fiche" role="dialog" aria-modal="true" aria-labelledby="fi-titre" hidden>
+  <div class="grab"></div>
+  <h3 id="fi-titre"></h3>
+  <p class="note" id="fi-sous" style="margin:-6px 0 12px"></p>
+  <div id="fi-corps"></div>
+  <div class="stack" style="margin-top:14px">
+    <button class="btn" id="fi-pptx" type="button">Télécharger ce rapport en PowerPoint</button>
+    <button class="btn ghost" data-close type="button">Fermer</button>
+  </div>
+</div>
 <div class="sheet" id="sheet-reglages" role="dialog" aria-modal="true" aria-labelledby="t-reglages" hidden>
   <div class="grab"></div>
   <div class="eo-img"><img src="entete-officiel.png" onerror="this.parentNode.hidden=true" alt="Task Force Présidentielle Ebola 17 – Ministère de la Santé publique, Hygiène et Prévoyance sociale – Système de gestion de l’incident MVE 17 – 17e épidémie de la maladie à virus Ebola – Division provinciale de la santé du Haut-Uele" width="1252" height="402"></div>

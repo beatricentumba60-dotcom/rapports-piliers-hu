@@ -638,10 +638,57 @@
         el('div', { cls: 't' }, [tag, el('b', { text: (depart ? 'Valeurs de départ · cumul au ' : '') + A.fr(r.date) + ' · ' + r.zone + (unite ? ' · ' + unite : '') }), el('span', { text: (r.auteur || 'auteur inconnu') })]), badge]);
     }));
   }
+  /* ---------- Fiche de consultation (lecture seule) ---------- */
+  function afficherFiche(r) {
+    var p = D.pilier(r.pilier) || { nom: r.pilier, sections: [], calculs: [] }, d = r.donnees || {}, V = d.valeurs || {}, T = d.textes || {}, LI = d.listes || {};
+    var e = d.entete || {}, unite = Object.keys(e).map(function (k) { return e[k]; }).filter(Boolean).join(', '), depart = A.estDepart(r);
+    $('#fi-titre').textContent = p.nom;
+    $('#fi-sous').textContent = (depart ? 'Valeurs de départ · cumul au ' : '') + A.fr(r.date) + ' · ' + r.zone + (unite ? ' · ' + unite : '') + ' · ' + libEtat(r) + ' · consultation seule';
+    var corps = [], nb = function (v) { return v == null ? '–' : fmt(v); };
+    (depart ? D.sectionsDepart(p) : D.sections(p)).forEach(function (sec) {
+      var bloc = [];
+      if (sec.champs) {
+        var dl = []; sec.champs.forEach(function (c) { if (V[c[0]] != null) dl.push(el('dt', { text: c[1] + (c[2] === 'stock' ? ' *' : '') }), el('dd', { text: nb(V[c[0]]) })); });
+        if (dl.length) bloc.push(el('dl', {}, dl));
+      }
+      if (sec.grille) {
+        var g = sec.grille, lg = g.lignes.filter(function (l) { return g.colonnes.some(function (k) { return V[sec.id + '.' + l[0] + '.' + k[0]] != null; }); });
+        if (lg.length) bloc.push(el('div', { cls: 'tw' }, [el('table', {}, [el('tr', {}, [el('th', { text: '' })].concat(g.colonnes.map(function (k) { return el('th', { text: k[1] }); })))]
+          .concat(lg.map(function (l) { return el('tr', {}, [el('td', { text: l[1] })].concat(g.colonnes.map(function (k) { return el('td', { cls: 'n', text: nb(V[sec.id + '.' + l[0] + '.' + k[0]]) }); }))); })))]));
+      }
+      if (sec.liste && (LI[sec.id] || []).length) {
+        var cols = sec.liste.colonnes;
+        bloc.push(el('div', { cls: 'tw' }, [el('table', {}, [el('tr', {}, cols.map(function (k) { return el('th', { text: k[1] }); }))]
+          .concat(LI[sec.id].map(function (row) { return el('tr', {}, cols.map(function (k) { return el('td', { cls: k[2] === 'n' ? 'n' : '', text: row[k[0]] == null ? '' : String(row[k[0]]) }); })); })))]));
+      }
+      if (sec.textes) sec.textes.forEach(function (t) { if (T[t[0]]) bloc.push(el('p', {}, [sec.textes.length > 1 ? el('b', { text: t[1] + ' : ' }) : null, document.createTextNode(T[t[0]])])); });
+      if (sec.photos && (d.photos || []).length) bloc.push(el('div', { cls: 'galerie' }, d.photos.map(function (x) { return vignette(x.id, x.legende, x.activite || ''); })));
+      if (bloc.length) corps.push(el('div', { cls: 'fiche-sec' }, [el('h4', { text: sec.titre })].concat(bloc)));
+    });
+    // Détail par aire de santé
+    var AI = d.aires || {}, nA = Object.keys(AI).filter(function (a) { return Object.keys(AI[a] || {}).length; });
+    if (nA.length) {
+      var libs = {}; D.champs(p).forEach(function (c) { libs[c.id] = c.lib; });
+      corps.push(el('div', { cls: 'fiche-sec' }, [el('h4', { text: 'Détail par aire de santé' })].concat(nA.map(function (a) {
+        return el('p', {}, [el('b', { text: a + ' : ' }), document.createTextNode(Object.keys(AI[a]).map(function (id) { return (libs[id] || id) + ' = ' + nb(AI[a][id]); }).join(' ; '))]);
+      }))));
+    }
+    // Indicateurs calculés
+    if (!depart && (p.calculs || []).length) {
+      var tmp = { donnees: d }, VV = {}; A.ids(p).forEach(function (c) { var v = A.valeur(tmp, c.id); if (v != null) VV[c.id] = v; });
+      var K = A.calculer(p, VV), dk = [];
+      p.calculs.forEach(function (c) { if (K[c.id] != null) dk.push(el('dt', { text: c.lib }), el('dd', { text: fmt(K[c.id], c.pct) })); });
+      if (dk.length) corps.push(el('div', { cls: 'fiche-sec' }, [el('h4', { text: 'Indicateurs calculés' }), el('dl', {}, dk)]));
+    }
+    if (!corps.length) corps.push(el('p', { cls: 'note', text: 'Rapport sans contenu.' }));
+    $('#fi-corps').replaceChildren.apply($('#fi-corps'), corps);
+    var bp = $('#fi-pptx'); bp.hidden = depart; bp.onclick = function () { pptxDe(r); };
+    $('#sheet-bg').hidden = false; $('#sheet-fiche').hidden = false; $('#sheet-fiche').scrollTop = 0;
+  }
   function ouvrirRapport(r) {
     var PT = state.reglages.portee;
-    if (lectureSeule()) { toast('La clé de la coordination permet de consulter les rapports, pas de les saisir ni de les modifier. Chaque rapport se saisit avec le code d’accès de son pilier et de sa zone.', 7000); return; }
-    if (PT && PT.pilier && (r.pilier !== PT.pilier || r.zone !== PT.zone)) { toast('Ce rapport relève d’un autre pilier ou d’une autre zone : votre code d’accès ne permet pas de le modifier. Consultez-le dans le tableau de bord.', 6000); return; }
+    if (lectureSeule()) { afficherFiche(r); return; }
+    if (PT && PT.pilier && (r.pilier !== PT.pilier || r.zone !== PT.zone)) { afficherFiche(r); return; }
     if (state.sale && !confirm('Des valeurs saisies ne sont pas enregistrées. Les abandonner ?')) return;
     $('#f-pilier').value = r.pilier; $('#f-date').value = r.date; $('#f-depart').checked = A.estDepart(r);
     state._pilierAff = null; state.courant = r; state.sale = false;
@@ -887,6 +934,9 @@
     var r = state.courant;
     if (!r || A.estDepart(r)) return;
     if (state.sale) { toast('Enregistrez d’abord vos modifications (« Enregistrer » ou « Valider et envoyer »), puis téléchargez.', 6000); return; }
+    pptxDe(r);
+  }
+  function pptxDe(r) {
     var f = { debut: r.date, fin: r.date, zones: [r.zone], zone: r.zone, pilier: r.pilier, periode: '0', cumul: false, unRapport: true };
     busy(true, 'Préparation du PowerPoint…');
     chargerScript('pptxgen.bundle.js', function () { return window.PptxGenJS; }).then(function () {
@@ -914,6 +964,8 @@
     var ls = lectureSeule();
     document.body.classList.toggle('lecture-seule', ls);
     var b = $('.tabs button[data-v="saisir"]'); if (b) b.hidden = ls;
+    $('#lib-liste').textContent = ls ? 'Rapports reçus' : 'Mes rapports';
+    if (ls && !state._quiFixe) { $('#l-qui').value = 'tous'; state._quiFixe = true; }
     if (ls && state.vue === 'saisir') montrer('tableau');
   }
   function montrer(v) {
@@ -1002,7 +1054,7 @@
       : PT && PT.lecture ? 'Clé de la coordination : consultation de tous les piliers et de toutes les zones (tableau de bord, qualité, exports). Pas de saisie : chaque rapport se saisit avec le code d’accès de son pilier et de sa zone.'
       : PT && PT.tout ? 'Clé de la coordination : accès à tous les piliers et à toutes les zones.' : '';
   }
-  function fermer() { $('#sheet-bg').hidden = true; $('#sheet-reglages').hidden = true; }
+  function fermer() { $('#sheet-bg').hidden = true; $('#sheet-reglages').hidden = true; $('#sheet-fiche').hidden = true; }
   function sauverReglages() {
     var R = { auteur: $('#r-auteur').value.trim(), url: $('#r-url').value.trim(), cle: $('#r-cle').value, cleCoord: $('#r-clecoord').value, pilier: $('#r-pilier').value, zone: $('#r-zone').value };
     if (R.url && !/^https:\/\/script\.google(usercontent)?\.com\//.test(R.url)) { $('#r-msg').textContent = 'L’adresse doit commencer par https://script.google.com/'; return; }
