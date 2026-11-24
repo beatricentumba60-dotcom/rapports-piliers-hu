@@ -590,7 +590,7 @@
         if (ex && (ex._etat !== 'envoye') && String(ex.maj) > String(r.maj)) return; // modification locale plus récente
         if (!ex || String(r.maj) >= String(ex.maj)) { var n = Object.assign({}, r, { _etat: 'envoye', _local: ex ? ex._local : false, _envoyeUneFois: true }); nouv.push(n); remplacer(n); }
       });
-      recus = nouv.length;
+      recus = nouv.length; rafraichirPortee();
       if (recus && $('#f-sections input.num')) setTimeout(function () { try { majCalculs(); } catch (e) { /* formulaire absent */ } }, 0); // concordance avec les rapports reçus
       var metas = (j.photos || []).map(function (m) {
         return S.photo(m.id).then(function (p) { return S.photoPut(Object.assign({}, p || {}, { id: m.id, rapportId: m.rapport, pilier: m.pilier, date: m.date, zone: m.zone, lien: m.lien, envoyee: true })); });
@@ -959,6 +959,20 @@
   }
 
   /* ---------- Vues, réglages ---------- */
+  // Revérifie auprès du script ce que permet la clé ou le code enregistré (sans repasser par les Réglages)
+  function rafraichirPortee() {
+    var R = state.reglages; if (!R.url || !R.cle || !navigator.onLine) return Promise.resolve();
+    return appel({ action: 'qui' }).then(function (j) { return j.portee || null; }, function (e) { return /action inconnue/.test(e.message) ? null : undefined; })
+      .then(function (PT) {
+        if (PT === undefined || JSON.stringify(PT) === JSON.stringify(R.portee || null)) return;
+        R.portee = PT; if (PT && PT.pilier) { R.pilier = PT.pilier; R.zone = PT.zone; }
+        S.set('reglages', R); appliquerLecture();
+        if (!(PT && PT.pilier)) $('#f-pilier').disabled = $('#f-zone').disabled = false;
+        if (!lectureSeule()) chargerSelection(true);
+        if (PT && PT.lecture) toast('Clé de la coordination : consultation seule. La saisie se fait avec les codes d’accès des piliers.', 6000);
+        else if (PT && PT.pilier) toast('Code d’accès : ' + D.pilier(PT.pilier).nom + ' – ' + PT.zone + '.', 5000);
+      });
+  }
   function lectureSeule() { var PT = state.reglages.portee; return !!(PT && PT.lecture); }
   function appliquerLecture() {
     var ls = lectureSeule();
@@ -1125,7 +1139,7 @@
       state.reglages = res[0] || {}; state.rapports = res[1] || []; state.derniere = res[2] || null;
       if (state.reglages.pilier) $('#f-pilier').value = state.reglages.pilier;
       chargerSelection(true); majBadge();
-      appliquerLecture(); montrer(lsGet('piliers-vue') || 'saisir');
+      appliquerLecture(); montrer(lsGet('piliers-vue') || 'saisir'); rafraichirPortee();
       if (!state.reglages.auteur) ouvrirReglages(); else synchroniser(true);
     }).catch(function () { toast('Stockage du téléphone indisponible : utilisez Chrome hors navigation privée.', 8000); });
     if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(function () { /* hors ligne indisponible */ });
