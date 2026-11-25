@@ -73,7 +73,7 @@
       ]
     },
     {
-      id: 'pec', nom: 'Prise en charge holistique', court: 'Prise en charge', couleur: '#1d4a6b', niveau: 'zone', unite: 'CTE / CT',
+      id: 'pec', nom: 'Prise en charge médicale et nutritionnelle', court: 'Prise en charge', couleur: '#1d4a6b', niveau: 'zone', unite: 'CTE / CT',
       entete: [['unite', 'CTE / CT', 'texte']],
       sections: [
         { id: 'lits', titre: 'Lits montés', grille: { somme: true, lignes: [['lits', 'Lits montés', 'stock']], colonnes: CS } },
